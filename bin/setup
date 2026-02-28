@@ -1,0 +1,33 @@
+#!/usr/bin/env ruby
+
+# frozen_string_literal: true
+
+require 'fileutils'
+
+APP_ROOT = File.expand_path('..', __dir__)
+ENV['RACK_ENV'] ||= 'development'
+
+def system!(*args, env: {})
+  system(env, *args, exception: true)
+end
+
+FileUtils.chdir(APP_ROOT) do
+  puts "== Environment: #{ENV['RACK_ENV']} =="
+
+  puts "\n== Installing dependencies =="
+  system! 'gem install bundler --conservative'
+  system! 'bundle install'
+
+  puts "\n== Copying environment file =="
+  unless File.exist?('.env')
+    FileUtils.cp('.env.example', '.env')
+    puts "Created .env from .env.example — fill in your TELEGRAM_BOT_TOKEN and database credentials."
+  end
+
+  puts "\n== Creating and migrating the database =="
+  system! 'bundle exec rake db:create db:migrate', env: { 'RACK_ENV' => ENV['RACK_ENV'] }
+
+  puts "\n== Done! =="
+  puts "Start the bot with:  bin/server"
+  puts "Open a console with: bin/console"
+end

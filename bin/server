@@ -1,0 +1,10 @@
+#!/usr/bin/env ruby
+
+# frozen_string_literal: true
+
+APP_ROOT = File.expand_path('..', __dir__)
+Dir.chdir(APP_ROOT)
+
+ENV['RACK_ENV'] ||= 'development'
+
+exec({ 'RACK_ENV' => ENV['RACK_ENV'] }, 'bundle', 'exec', 'ruby', 'bot.rb')

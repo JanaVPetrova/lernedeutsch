@@ -1,0 +1,136 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE:    ghcr.io/${{ github.repository }}   # e.g. ghcr.io/acme/lernedeutsch
+
+jobs:
+  # ── Test ────────────────────────────────────────────────────────────────────
+  test:
+    name: RSpec
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB:       lernedeutsch_test
+          POSTGRES_USER:     postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      RACK_ENV:            test
+      DB_HOST:             localhost
+      DB_USERNAME:         postgres
+      DB_PASSWORD:         postgres
+      TELEGRAM_BOT_TOKEN:  dummy   # bot.rb not loaded in tests; prevents ENV.fetch raise
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Create and migrate test database
+        run: bundle exec rake db:create db:migrate
+
+      - name: Run specs
+        run: bundle exec rspec
+
+  # ── Build & push Docker image ────────────────────────────────────────────────
+  build:
+    name: Build & push image
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write    # needed to push to GHCR
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags:      ${{ steps.meta.outputs.tags }}
+          labels:    ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ── Deploy to Digital Ocean ──────────────────────────────────────────────────
+  # Required GitHub secrets:
+  #   DO_HOST        – Droplet IP or hostname
+  #   DO_USER        – SSH user (must be in the docker group)
+  #   DO_SSH_KEY     – Private key (public half in ~/.ssh/authorized_keys on the Droplet)
+  #   DO_APP_DIR     – Absolute path to the app on the Droplet, e.g. /var/www/lernedeutsch
+  #   GHCR_TOKEN     – GitHub PAT with read:packages scope (for docker login on the Droplet)
+  deploy:
+    name: Deploy to Digital Ocean
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host:     ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key:      ${{ secrets.DO_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.DO_APP_DIR }}
+
+            # Authenticate against GHCR so the Droplet can pull the image
+            echo "${{ secrets.GHCR_TOKEN }}" \
+              | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # Pin the image tag in the server's .env so docker compose picks it up
+            IMAGE_TAG="${{ env.IMAGE }}:sha-${{ github.sha }}"
+            if grep -q '^BOT_IMAGE=' .env 2>/dev/null; then
+              sed -i "s|^BOT_IMAGE=.*|BOT_IMAGE=${IMAGE_TAG}|" .env
+            else
+              echo "BOT_IMAGE=${IMAGE_TAG}" >> .env
+            fi
+
+            # Pull the new image and recreate only the bot container
+            docker compose pull bot
+            docker compose up -d --no-deps bot
+
+            # Remove dangling images to keep disk usage tidy
+            docker image prune -f

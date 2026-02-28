@@ -1,0 +1,37 @@
+# systemd unit file — manages the Docker Compose stack for the Deutsch Telegram Bot.
+#
+# One-time server setup (run as root):
+#   1. Install Docker and add the deploy user to the docker group:
+#        usermod -aG docker deploy
+#        newgrp docker
+#   2. Install the service:
+#        cp config/lernedeutsch.service /etc/systemd/system/lernedeutsch.service
+#        systemctl daemon-reload
+#        systemctl enable lernedeutsch
+#        systemctl start lernedeutsch
+
+[Unit]
+Description=Deutsch Telegram Bot (Docker Compose)
+Documentation=https://github.com/your-org/lernedeutsch
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=deploy
+Group=docker
+WorkingDirectory=/var/www/lernedeutsch
+
+# docker compose up runs in the foreground; stdout/stderr go to the journal.
+ExecStart=docker compose up
+ExecStop=docker compose down
+
+Restart=on-failure
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lernedeutsch
+
+[Install]
+WantedBy=multi-user.target
