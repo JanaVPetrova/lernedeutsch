@@ -6,7 +6,7 @@ primary_role: bot
 servers:
   bot:
     hosts:
-      - $DEPLOY_HOST
+      - <%= ENV['DEPLOY_HOST'] %>
 
 builder:
   arch: amd64
@@ -25,4 +25,3 @@ env:
   secret:
     - TELEGRAM_BOT_TOKEN
     - DATABASE_URL
-
