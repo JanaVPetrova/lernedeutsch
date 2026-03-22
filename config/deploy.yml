@@ -7,6 +7,7 @@ servers:
   bot:
     hosts:
       - <%= ENV['DEPLOY_HOST'] %>
+    proxy: false
 
 builder:
   arch: amd64
