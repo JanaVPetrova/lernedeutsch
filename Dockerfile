@@ -32,5 +32,8 @@ RUN chmod +x bin/entrypoint
 
 ENV RACK_ENV=production
 
+HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=3 \
+  CMD pgrep -f "ruby bot.rb" || exit 1
+
 ENTRYPOINT ["bin/entrypoint"]
 CMD ["bundle", "exec", "ruby", "bot.rb"]
