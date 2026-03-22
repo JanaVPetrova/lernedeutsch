@@ -1,10 +1,15 @@
 service: lernedeutsch
 image: ghcr.io/$KAMAL_REGISTRY_USERNAME/lernedeutsch
 
+primary_role: bot
+
 servers:
   bot:
     hosts:
       - $DEPLOY_HOST
+
+healthcheck:
+  disabled: true
 
 builder:
   arch: amd64
