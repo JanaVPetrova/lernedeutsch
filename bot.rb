@@ -220,11 +220,11 @@ bot.command 'stop' do |ctx|
 end
 
 bot.command 'upload' do |ctx|
-  ctx.enter_scene(:upload_words)
+  ctx.bot.scenes[:upload_words]&.enter(ctx)
 end
 
 bot.command 'reminder' do |ctx|
-  ctx.enter_scene(:set_reminder)
+  ctx.bot.scenes[:set_reminder]&.enter(ctx)
 end
 
 # ── Message Handler ───────────────────────────────────────────────────────────
@@ -232,14 +232,30 @@ end
 bot.on :message do |ctx|
   next unless ctx.message.text
 
+  user_id = ctx.from&.id
+  text    = ctx.message.text
+  scene   = ctx.session[:telegem_scene]&.[](:id)
+  ctx.logger.info("[msg] user=#{user_id} scene=#{scene || 'none'} mode=#{ctx.session[:mode] || 'none'} text=#{text.inspect}")
+
   if ctx.session[:mode]
+    ctx.logger.info("[learn] user=#{user_id} answering in mode=#{ctx.session[:mode]}")
     handle_learning_answer(ctx)
   else
-    case ctx.message.text
-    when 'German → Translation' then start_learning(ctx, 'learn_de_to_native')
-    when 'Translation → German' then start_learning(ctx, 'learn_native_to_de')
-    when 'Upload Words'         then ctx.enter_scene(:upload_words)
-    when 'Set Reminder'         then ctx.enter_scene(:set_reminder)
+    case text
+    when 'German → Translation'
+      ctx.logger.info("[nav] user=#{user_id} starting learn_de_to_native")
+      start_learning(ctx, 'learn_de_to_native')
+    when 'Translation → German'
+      ctx.logger.info("[nav] user=#{user_id} starting learn_native_to_de")
+      start_learning(ctx, 'learn_native_to_de')
+    when 'Upload Words'
+      ctx.logger.info("[nav] user=#{user_id} entering upload_words scene")
+      ctx.bot.scenes[:upload_words]&.enter(ctx)
+    when 'Set Reminder'
+      ctx.logger.info("[nav] user=#{user_id} entering set_reminder scene")
+      ctx.bot.scenes[:set_reminder]&.enter(ctx)
+    else
+      ctx.logger.info("[nav] user=#{user_id} unhandled text: #{text.inspect}")
     end
   end
 end
