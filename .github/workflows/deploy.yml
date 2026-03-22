@@ -28,17 +28,11 @@ jobs:
       - name: Trust the Droplet host key
         run: ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Write Kamal secrets
-        run: |
-          mkdir -p .kamal
-          cat > .kamal/secrets <<EOF
-          RACK_ENV=production
-          DEPLOY_HOST=${{ secrets.DEPLOY_HOST }}
-          KAMAL_REGISTRY_USERNAME=${{ github.repository_owner }}
-          KAMAL_REGISTRY_PASSWORD=${{ secrets.GITHUB_TOKEN }}
-          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          EOF
-
       - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          KAMAL_REGISTRY_USERNAME: ${{ github.repository_owner }}
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: bundle exec kamal deploy

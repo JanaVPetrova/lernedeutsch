@@ -7,6 +7,9 @@ proxy: false
 servers:
   - $DEPLOY_HOST
 
+builder:
+  arch: amd64
+
 ssh:
   user: deploy
 
