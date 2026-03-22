@@ -201,6 +201,7 @@ class UserRegistrationMiddleware
   end
 end
 
+bot.use Telegem::Session::Middleware.new
 bot.use UserRegistrationMiddleware.new
 
 # ── Commands ──────────────────────────────────────────────────────────────────
