@@ -1,0 +1,24 @@
+service: lernedeutsch
+image: ghcr.io/$KAMAL_REGISTRY_USERNAME/lernedeutsch
+
+# This is a Telegram bot (long-polling), not a web service — skip kamal-proxy
+proxy: false
+
+servers:
+  - $DEPLOY_HOST
+
+ssh:
+  user: deploy
+
+registry:
+  server: ghcr.io
+  username:
+    - KAMAL_REGISTRY_USERNAME
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  secret:
+    - TELEGRAM_BOT_TOKEN
+    - DATABASE_URL
+

@@ -7,6 +7,7 @@ gem 'activerecord', '~> 8.1'
 gem 'pg', '~> 1.6'
 gem 'dotenv', '~> 3.2'
 gem 'rake'
+gem 'kamal'
 
 group :development, :test do
   gem 'rspec', '~> 3.13'

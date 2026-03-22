@@ -1,20 +1,16 @@
 default: &default
   adapter: postgresql
   encoding: unicode
-  host: <%= ENV['DB_HOST'] || 'localhost' %>
-  port: <%= ENV['DB_PORT'] || 5432 %>
-  username: <%= ENV['DB_USERNAME'] || 'postgres' %>
-  password: <%= ENV['DB_PASSWORD'] %>
   pool: 5
 
 development:
   <<: *default
-  database: <%= ENV['DB_NAME'] || 'lernedeutsch_development' %>
+  url: <%= ENV.fetch('DATABASE_URL', 'postgresql://postgres:postgres@localhost/lernedeutsch_development') %>
 
 test:
   <<: *default
-  database: lernedeutsch_test
+  url: <%= ENV.fetch('DATABASE_URL', 'postgresql://postgres:postgres@localhost/lernedeutsch_test') %>
 
 production:
   <<: *default
-  database: lernedeutsch
+  url: <%= ENV['DATABASE_URL'] %>
