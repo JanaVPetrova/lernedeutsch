@@ -2,7 +2,7 @@
 set -e
 
 echo "== Migrating database =="
-bundle exec rake db:create db:migrate
+bundle exec rake db:migrate
 
 echo "== Starting bot =="
 exec "$@"
