@@ -8,9 +8,6 @@ servers:
     hosts:
       - $DEPLOY_HOST
 
-healthcheck:
-  disabled: true
-
 builder:
   arch: amd64
 
