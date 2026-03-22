@@ -92,8 +92,8 @@ end
 # Step 1 – prompt user for a file or pasted text.
 # Step 2 – receive content, parse, and persist.
 bot.scene :upload_words do
-  step :prompt do |ctx|
-    ctx.reply <<~TEXT, parse_mode: 'Markdown'
+  step :start do |ctx|
+    ctx.ask <<~TEXT, parse_mode: 'Markdown'
       Send me your word list as a *.csv* or *.txt* file, or just paste the words here.
 
       Format – one pair per line:
@@ -145,9 +145,9 @@ end
 # Step 2 – ask for days.
 # Step 3 – save and confirm.
 bot.scene :set_reminder do
-  step :ask_time do |ctx|
-    ctx.reply "At what time should I remind you to study?\n\nPlease reply in *HH:MM* format (e.g. _09:00_ or _18:30_).",
-              parse_mode: 'Markdown'
+  step :start do |ctx|
+    ctx.ask "At what time should I remind you to study?\n\nPlease reply in *HH:MM* format (e.g. _09:00_ or _18:30_).",
+            parse_mode: 'Markdown'
   end
 
   step :ask_days do |ctx|
@@ -159,8 +159,8 @@ bot.scene :set_reminder do
     end
 
     ctx.session[:reminder_time] = time
-    ctx.reply "Great! Which days?\n\nType *all*, *weekdays*, *weekend*, or list specific days like _mon,wed,fri_.",
-              parse_mode: 'Markdown'
+    ctx.ask "Great! Which days?\n\nType *all*, *weekdays*, *weekend*, or list specific days like _mon,wed,fri_.",
+            parse_mode: 'Markdown'
   end
 
   step :save do |ctx|
