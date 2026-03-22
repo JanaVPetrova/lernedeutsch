@@ -1,11 +1,10 @@
 service: lernedeutsch
 image: ghcr.io/$KAMAL_REGISTRY_USERNAME/lernedeutsch
 
-# This is a Telegram bot (long-polling), not a web service — skip kamal-proxy
-proxy: false
-
 servers:
-  - $DEPLOY_HOST
+  bot:
+    hosts:
+      - $DEPLOY_HOST
 
 builder:
   arch: amd64
