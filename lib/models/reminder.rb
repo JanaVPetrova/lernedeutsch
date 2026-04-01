@@ -7,6 +7,16 @@ class Reminder < ActiveRecord::Base
   validates :user_id, uniqueness: true
   validate  :days_must_be_valid
 
+  def self.parse_days(input)
+    case input.strip.downcase
+    when 'all'      then ALL_DAYS.dup
+    when 'weekdays' then %w[mon tue wed thu fri]
+    when 'weekend'  then %w[sat sun]
+    else
+      input.strip.downcase.split(',').map(&:strip).select { |d| ALL_DAYS.include?(d) }
+    end
+  end
+
   def due_now?
     return false unless enabled
 

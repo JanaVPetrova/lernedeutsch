@@ -13,9 +13,13 @@ require 'erb'
 config = YAML.safe_load(ERB.new(File.read(File.join(__dir__, '..', 'config', 'database.yml'))).result, aliases: true)
 ActiveRecord::Base.establish_connection(config['test'])
 
-# Load models and services
-Dir[File.join(__dir__, '..', 'lib', 'models', '*.rb')].each { |f| require f }
+# Load models, services, and handlers
+Dir[File.join(__dir__, '..', 'lib', 'models',   '*.rb')].each { |f| require f }
 Dir[File.join(__dir__, '..', 'lib', 'services', '*.rb')].each { |f| require f }
+Dir[File.join(__dir__, '..', 'lib', 'handlers', '*.rb')].each { |f| require f }
+
+# Stub the top-level constant that bot.rb normally defines at startup
+MAIN_KEYBOARD = :main_keyboard_stub unless defined?(MAIN_KEYBOARD)
 
 # FactoryBot
 FactoryBot.definition_file_paths = [File.join(__dir__, 'support')]

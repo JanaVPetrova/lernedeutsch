@@ -2,7 +2,7 @@ source 'https://rubygems.org'
 
 ruby '4.0.1'
 
-gem 'telegem', '~> 3.2'
+gem 'telegram-bot-ruby', '~> 0.19'
 gem 'activerecord', '~> 8.1'
 gem 'pg', '~> 1.6'
 gem 'dotenv', '~> 3.2'

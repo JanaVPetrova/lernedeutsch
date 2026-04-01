@@ -17,3 +17,5 @@ require_relative 'services/answer_scorer'
 require_relative 'services/spaced_repetition'
 require_relative 'services/word_importer'
 require_relative 'services/reminder_scheduler'
+
+require_relative 'handlers/learning_handler'
