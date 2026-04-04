@@ -9,9 +9,9 @@ class Reminder < ActiveRecord::Base
 
   def self.parse_days(input)
     case input.strip.downcase
-    when 'all'      then ALL_DAYS.dup
-    when 'weekdays' then %w[mon tue wed thu fri]
-    when 'weekend'  then %w[sat sun]
+    when 'все'      then ALL_DAYS.dup
+    when 'будни'    then %w[mon tue wed thu fri]
+    when 'выходные' then %w[sat sun]
     else
       input.strip.downcase.split(',').map(&:strip).select { |d| ALL_DAYS.include?(d) }
     end

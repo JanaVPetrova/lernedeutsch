@@ -34,7 +34,7 @@ class AnswerScorer
   private
 
   def normalize(str)
-    str.to_s.strip.downcase
+    str.to_s.gsub(/\([^)]*\)/, '').strip.downcase.squeeze(' ')
   end
 
   def split_article(str)

@@ -4,6 +4,7 @@ Dotenv.load('.env.test', '.env')
 ENV['RACK_ENV'] = 'test'
 
 require 'active_record'
+require 'telegram/bot'
 require 'factory_bot'
 require 'database_cleaner/active_record'
 
@@ -13,12 +14,16 @@ require 'erb'
 config = YAML.safe_load(ERB.new(File.read(File.join(__dir__, '..', 'config', 'database.yml'))).result, aliases: true)
 ActiveRecord::Base.establish_connection(config['test'])
 
+# msgs.rb must load before handlers because LearningHandler::LEARNING_KEYBOARD
+# references MSGS at class-load time.
+require_relative '../lib/msgs'
+
 # Load models, services, and handlers
 Dir[File.join(__dir__, '..', 'lib', 'models',   '*.rb')].each { |f| require f }
 Dir[File.join(__dir__, '..', 'lib', 'services', '*.rb')].each { |f| require f }
 Dir[File.join(__dir__, '..', 'lib', 'handlers', '*.rb')].each { |f| require f }
 
-# Stub the top-level constant that bot.rb normally defines at startup
+# Stub top-level constants that bot.rb defines at startup
 MAIN_KEYBOARD = :main_keyboard_stub unless defined?(MAIN_KEYBOARD)
 
 # FactoryBot

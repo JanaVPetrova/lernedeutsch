@@ -10,7 +10,20 @@ class WordReview < ActiveRecord::Base
   scope :due,      -> { where('due_date <= ?', Date.today) }
   scope :for_user, ->(user) { where(user: user) }
 
-  def self.next_for_user(user)
-    for_user(user).due.joins(:word).order(:due_date).first
+  def self.next_for_user(user, group: nil)
+    apply_group(for_user(user).due.joins(:word), group).order(:due_date).first
   end
+
+  def self.due_count_for_user(user, group: nil)
+    apply_group(for_user(user).due.joins(:word), group).count
+  end
+
+  def self.apply_group(scope, group)
+    case group
+    when nil        then scope
+    when :ungrouped then scope.where(words: { word_group_id: nil })
+    else            scope.where(words: { word_group_id: group.id })
+    end
+  end
+  private_class_method :apply_group
 end

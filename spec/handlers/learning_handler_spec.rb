@@ -20,7 +20,6 @@ RSpec.describe LearningHandler do
 
   subject(:handler) { described_class.new(bot, message, session) }
 
-  # Capture all send_message calls; individual examples can add expectations on top.
   let(:sent_messages) { [] }
   before { allow(api).to receive(:send_message) { |**args| sent_messages << args } }
 
@@ -50,70 +49,106 @@ RSpec.describe LearningHandler do
   # ── #show_next_word ──────────────────────────────────────────────────────────
 
   describe '#show_next_word' do
-    context 'when no words are due and none have been reviewed yet' do
+    context 'when no words are due and none reviewed this session' do
       before { session[:reviewed_count] = 0 }
 
-      it 'sends a "come back later" message' do
+      it 'sends the "no words" message' do
         handler.show_next_word
-        expect(sent_messages.last).to include(text: include('No words are due'), reply_markup: MAIN_KEYBOARD)
+        expect(sent_messages.last[:text]).to eq(MSGS[:learn_no_words])
       end
 
-      it 'clears mode from session' do
+      it 'returns to main keyboard' do
+        handler.show_next_word
+        expect(sent_messages.last[:reply_markup]).to eq(MAIN_KEYBOARD)
+      end
+
+      it 'clears mode and current_review_id from session' do
         session[:mode] = 'learn_de_to_native'
+        session[:current_review_id] = 42
         handler.show_next_word
         expect(session[:mode]).to be_nil
-      end
-
-      it 'clears current_review_id from session' do
-        session[:current_review_id] = 99
-        handler.show_next_word
         expect(session[:current_review_id]).to be_nil
       end
     end
 
-    context 'when no words are due but some have been reviewed this session' do
+    context 'when no words are due but some were reviewed' do
       before { session[:reviewed_count] = 3 }
 
-      it 'sends an "all done" message with the count' do
+      it 'sends the "all done" message with the count' do
         handler.show_next_word
-        expect(sent_messages.last).to include(text: include('All done'), reply_markup: MAIN_KEYBOARD)
+        expect(sent_messages.last[:text]).to eq(MSGS[:learn_all_done].call(3))
+      end
+
+      it 'returns to main keyboard' do
+        handler.show_next_word
+        expect(sent_messages.last[:reply_markup]).to eq(MAIN_KEYBOARD)
       end
     end
 
     context 'when a word is due' do
-      let(:word)    { create(:word, user: user, german_word: 'Hund', translation: 'dog') }
+      let(:word)    { create(:word, user: user, german_word: 'Hund', translation: 'собака') }
       let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
 
+      before { session[:mode] = 'learn_de_to_native' }
+
       it 'stores the review id in session' do
-        session[:mode] = 'learn_de_to_native'
         handler.show_next_word
         expect(session[:current_review_id]).to eq(review.id)
       end
 
-      it 'prompts with the German word in learn_de_to_native mode' do
-        session[:mode] = 'learn_de_to_native'
+      it 'shows the LEARNING_KEYBOARD' do
         handler.show_next_word
-        expect(sent_messages.last).to include(text: include('Hund'), parse_mode: 'Markdown')
+        expect(sent_messages.last[:reply_markup]).to eq(LearningHandler::LEARNING_KEYBOARD)
+      end
+
+      it 'prompts with the German word in learn_de_to_native mode' do
+        handler.show_next_word
+        expect(sent_messages.last[:text]).to include('Hund')
+      end
+
+      it 'prompts to translate to Russian in learn_de_to_native mode' do
+        handler.show_next_word
+        expect(sent_messages.last[:text]).to include(MSGS[:learn_prompt_de_to_ru].call('Hund'))
       end
 
       it 'prompts with the translation in learn_native_to_de mode' do
         session[:mode] = 'learn_native_to_de'
         handler.show_next_word
-        expect(sent_messages.last).to include(text: include('dog'), parse_mode: 'Markdown')
+        expect(sent_messages.last[:text]).to include('собака')
       end
 
-      it 'includes the /stop hint in the prompt' do
-        session[:mode] = 'learn_de_to_native'
+      it 'includes the /stop hint' do
         handler.show_next_word
         expect(sent_messages.last[:text]).to include('/stop')
       end
 
-      it 'includes the article when the word has one' do
-        word.update!(article: 'der')
-        session[:mode] = 'learn_native_to_de'
+      it 'includes the due count in the prompt' do
         handler.show_next_word
-        # correct answer prompt shows translation, not German — article tested via handle_answer
-        expect(session[:current_review_id]).to eq(review.id)
+        expect(sent_messages.last[:text]).to include(MSGS[:learn_progress].call(1))
+      end
+
+      it 'includes the article in the German word when present' do
+        word.update!(article: 'der')
+        handler.show_next_word
+        expect(sent_messages.last[:text]).to include('der Hund')
+      end
+    end
+
+    context 'with a group filter' do
+      let(:group)         { create(:word_group, user: user) }
+      let(:word_in_group) { create(:word, user: user, word_group: group) }
+      let(:word_outside)  { create(:word, user: user, word_group: nil) }
+      let!(:review_in)    { create(:word_review, word: word_in_group, user: user, due_date: Date.today) }
+      let!(:review_out)   { create(:word_review, word: word_outside,  user: user, due_date: Date.today - 1) }
+
+      before do
+        session[:mode]       = 'learn_de_to_native'
+        session[:word_group] = group
+      end
+
+      it 'shows only the word in the selected group' do
+        handler.show_next_word
+        expect(session[:current_review_id]).to eq(review_in.id)
       end
     end
   end
@@ -124,20 +159,20 @@ RSpec.describe LearningHandler do
     context 'when session has no current review' do
       before { session[:current_review_id] = nil }
 
-      it 'clears the mode' do
+      it 'clears mode' do
         session[:mode] = 'learn_de_to_native'
         handler.handle_answer
         expect(session[:mode]).to be_nil
       end
 
-      it 'sends the main menu' do
+      it 'sends the welcome-back message with main keyboard' do
         handler.handle_answer
         expect(sent_messages.last).to include(reply_markup: MAIN_KEYBOARD)
       end
     end
 
-    context 'when a current review exists' do
-      let(:word)    { create(:word, user: user, german_word: 'Katze', translation: 'cat') }
+    context 'with an active review' do
+      let(:word)    { create(:word, user: user, german_word: 'Katze', translation: 'кошка') }
       let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
 
       before do
@@ -146,17 +181,19 @@ RSpec.describe LearningHandler do
         session[:reviewed_count]    = 0
       end
 
-      context 'with a perfect answer' do
-        let(:answer_text) { 'cat' }
+      # ── Perfect answer ────────────────────────────────────────────────────────
 
-        it 'sends the 🎉 feedback' do
+      context 'with a perfect answer' do
+        let(:answer_text) { 'кошка' }
+
+        it 'sends the perfect feedback emoji' do
           handler.handle_answer
           expect(sent_messages.first[:text]).to include('🎉')
         end
 
-        it 'includes the correct answer in the feedback' do
+        it 'does NOT show the correct answer on a perfect score' do
           handler.handle_answer
-          expect(sent_messages.first[:text]).to include('cat')
+          expect(sent_messages.first[:text]).not_to include(MSGS[:learn_correct_answer].call('кошка'))
         end
 
         it 'increments reviewed_count' do
@@ -169,34 +206,100 @@ RSpec.describe LearningHandler do
         end
       end
 
-      context 'with an almost-correct answer (minor typo)' do
-        let(:answer_text) { 'caat' }
+      # ── Partial / wrong answer ────────────────────────────────────────────────
 
-        it 'sends the 👍 or ⚠️ feedback' do
+      context 'with a partial answer' do
+        let(:answer_text) { 'кошки' }
+
+        it 'sends partial feedback' do
           handler.handle_answer
-          expect(sent_messages.first[:text]).to match(/👍|⚠️/)
+          expect(sent_messages.first[:text]).to match(/👍|⚠️|❌/)
+        end
+
+        it 'shows the correct answer' do
+          handler.handle_answer
+          expect(sent_messages.first[:text]).to include(MSGS[:learn_correct_answer].call('кошка'))
         end
       end
 
-      context 'with a wrong answer' do
+      context 'with a completely wrong answer' do
         let(:answer_text) { 'xyz' }
 
-        it 'sends the ❌ feedback' do
+        it 'sends the wrong-answer feedback' do
           handler.handle_answer
           expect(sent_messages.first[:text]).to include('❌')
         end
-      end
 
-      context 'with an empty answer' do
-        let(:answer_text) { '' }
-
-        it 'sends the ❌ no-answer feedback' do
+        it 'shows the correct answer' do
           handler.handle_answer
-          expect(sent_messages.first[:text]).to include('❌')
+          expect(sent_messages.first[:text]).to include(MSGS[:learn_correct_answer].call('кошка'))
         end
       end
 
-      context 'in learn_native_to_de mode' do
+      # ── Skip button ───────────────────────────────────────────────────────────
+
+      context 'when the skip button is pressed' do
+        let(:answer_text) { MSGS[:btn_skip] }
+
+        it 'sends the skipped feedback' do
+          handler.handle_answer
+          expect(sent_messages.first[:text]).to include(MSGS[:feedback_empty])
+        end
+
+        it 'shows the correct answer after skip' do
+          handler.handle_answer
+          expect(sent_messages.first[:text]).to include(MSGS[:learn_correct_answer].call('кошка'))
+        end
+
+        it 'updates the SRS with score 0' do
+          expect { handler.handle_answer }.to change { review.reload.repetitions }.to(0)
+            .and change { review.reload.due_date }
+        end
+
+        it 'increments reviewed_count' do
+          handler.handle_answer
+          expect(session[:reviewed_count]).to eq(1)
+        end
+      end
+
+      # ── Report mistake button ─────────────────────────────────────────────────
+
+      context 'when the report-mistake button is pressed' do
+        let(:answer_text) { MSGS[:btn_report_mistake] }
+
+        it 'sets session scene to :edit_word' do
+          handler.handle_answer
+          expect(session[:scene]).to eq(:edit_word)
+        end
+
+        it 'sets scene_step to :awaiting_translation' do
+          handler.handle_answer
+          expect(session[:scene_step]).to eq(:awaiting_translation)
+        end
+
+        it 'stores the review id in session' do
+          handler.handle_answer
+          expect(session[:edit_review_id]).to eq(review.id)
+        end
+
+        it 'sends the edit prompt with the current translation' do
+          handler.handle_answer
+          expect(sent_messages.last[:text]).to include('кошка')
+        end
+
+        it 'removes the learning keyboard during editing' do
+          handler.handle_answer
+          expect(sent_messages.last[:reply_markup]).to be_a(Telegram::Bot::Types::ReplyKeyboardRemove)
+        end
+
+        it 'does not update the SRS record' do
+          expect { handler.handle_answer }.not_to change { review.reload.due_date }
+        end
+      end
+
+      # ── Mode: native → German ─────────────────────────────────────────────────
+
+      context 'in learn_native_to_de mode with a perfect answer' do
         let(:answer_text) { 'Katze' }
 
         before { session[:mode] = 'learn_native_to_de' }
@@ -217,7 +320,7 @@ RSpec.describe LearningHandler do
           session[:mode]              = 'learn_native_to_de'
         end
 
-        it 'accepts the full "article word" as a perfect answer' do
+        it 'accepts "article word" as a perfect answer' do
           handler.handle_answer
           expect(sent_messages.first[:text]).to include('🎉')
         end

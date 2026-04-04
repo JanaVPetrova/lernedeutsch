@@ -1,5 +1,6 @@
 class Word < ActiveRecord::Base
   belongs_to :user
+  belongs_to :word_group, optional: true
   has_one    :word_review, dependent: :destroy
 
   validates :german_word,  presence: true

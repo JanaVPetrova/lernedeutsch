@@ -72,9 +72,44 @@ RSpec.describe AnswerScorer do
       let(:expected) { 'gehen' }
       let(:given)    { 'der gehen' }
 
-      it 'scores based on the word portion' do
-        # "gehen" vs "gehen" after article handling — still high
+      it 'returns a non-zero score' do
         expect(score).to be > 0
+      end
+    end
+
+    # ── Service-mark stripping ─────────────────────────────────────────────────
+
+    context 'when expected contains a service mark like (мн.)' do
+      let(:expected) { 'собаки (мн.)' }
+      let(:given)    { 'собаки' }
+
+      it 'scores 100 — the mark is ignored' do
+        expect(score).to eq(100)
+      end
+    end
+
+    context 'when both expected and given contain the service mark' do
+      let(:expected) { 'собаки (мн.)' }
+      let(:given)    { 'собаки (мн.)' }
+
+      it { is_expected.to eq(100) }
+    end
+
+    context 'when expected has multiple parenthetical marks' do
+      let(:expected) { 'идти (куда-л.) (пешком)' }
+      let(:given)    { 'идти' }
+
+      it 'strips all marks and scores correctly' do
+        expect(score).to eq(100)
+      end
+    end
+
+    context 'when the service mark appears mid-word in expected' do
+      let(:expected) { 'die Hand (Hände)' }
+      let(:given)    { 'die Hand' }
+
+      it 'strips the parenthetical and scores 100' do
+        expect(score).to eq(100)
       end
     end
   end

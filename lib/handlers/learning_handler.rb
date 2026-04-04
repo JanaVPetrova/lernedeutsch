@@ -1,4 +1,9 @@
 class LearningHandler
+  LEARNING_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
+    keyboard: [[MSGS[:btn_skip], MSGS[:btn_report_mistake]]],
+    resize_keyboard: true
+  )
+
   def initialize(bot, message, session)
     @bot     = bot
     @message = message
@@ -14,17 +19,13 @@ class LearningHandler
 
   def show_next_word
     user   = User.find_or_create_from_telegram(@message.from)
-    review = WordReview.next_for_user(user)
+    group  = @session[:word_group]
+    review = WordReview.next_for_user(user, group: group)
 
     unless review
       reviewed = @session[:reviewed_count] || 0
-      if reviewed > 0
-        reply "All done! You reviewed #{reviewed} word#{reviewed == 1 ? '' : 's'} today. Great work! 🎉",
-              reply_markup: MAIN_KEYBOARD
-      else
-        reply "No words are due for review right now. Come back later! ⏰",
-              reply_markup: MAIN_KEYBOARD
-      end
+      msg = reviewed > 0 ? MSGS[:learn_all_done].call(reviewed) : MSGS[:learn_no_words]
+      reply msg, reply_markup: MAIN_KEYBOARD
       @session[:mode]              = nil
       @session[:current_review_id] = nil
       return
@@ -32,17 +33,17 @@ class LearningHandler
 
     @session[:current_review_id] = review.id
     word      = review.word
-    mode      = @session[:mode]
-    due_count = WordReview.for_user(user).due.count
+    due_count = WordReview.due_count_for_user(user, group: group)
 
-    prompt = if mode == 'learn_de_to_native'
-               "Translate to your language:\n\n*#{word.full_german}*"
+    prompt = if @session[:mode] == 'learn_de_to_native'
+               MSGS[:learn_prompt_de_to_ru].call(word.full_german)
              else
-               "Translate to German:\n\n*#{word.translation}*"
+               MSGS[:learn_prompt_ru_to_de].call(word.translation)
              end
 
-    reply "#{due_count} word#{due_count == 1 ? '' : 's'} left  |  /stop to quit\n\n#{prompt}",
-          parse_mode: 'Markdown'
+    reply "#{MSGS[:learn_progress].call(due_count)}\n\n#{prompt}",
+          parse_mode: 'Markdown',
+          reply_markup: LEARNING_KEYBOARD
   end
 
   def handle_answer
@@ -50,32 +51,50 @@ class LearningHandler
     unless review
       @session[:mode] = nil
       user = User.find_or_create_from_telegram(@message.from)
-      reply "Welcome back, #{user.display_name}! Choose what to do:", reply_markup: MAIN_KEYBOARD
+      reply MSGS[:welcome_back].call(user.display_name), reply_markup: MAIN_KEYBOARD
       return
     end
 
     word     = review.word
-    mode     = @session[:mode]
-    expected = mode == 'learn_de_to_native' ? word.translation : word.full_german
-    score    = AnswerScorer.score(expected: expected, given: @message.text)
+    expected = @session[:mode] == 'learn_de_to_native' ? word.translation : word.full_german
 
-    SpacedRepetition.update(review, score)
-    @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
+    case @message.text
+    when MSGS[:btn_skip]
+      SpacedRepetition.update(review, 0)
+      @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
+      reply "#{MSGS[:feedback_empty]}\n#{MSGS[:learn_correct_answer].call(expected)}",
+            parse_mode: 'Markdown'
+      show_next_word
 
-    emoji, label = feedback_for(score)
-    reply "#{emoji} #{label}\nCorrect answer: *#{expected}*", parse_mode: 'Markdown'
-    show_next_word
+    when MSGS[:btn_report_mistake]
+      @session[:scene]          = :edit_word
+      @session[:scene_step]     = :awaiting_translation
+      @session[:edit_review_id] = @session[:current_review_id]
+      reply MSGS[:edit_ask_translation].call(word.translation),
+            parse_mode: 'Markdown',
+            reply_markup: Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
+
+    else
+      score = AnswerScorer.score(expected: expected, given: @message.text)
+      SpacedRepetition.update(review, score)
+      @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
+
+      text = feedback_for(score)
+      text += "\n#{MSGS[:learn_correct_answer].call(expected)}" if score < 100
+      reply text, parse_mode: 'Markdown'
+      show_next_word
+    end
   end
 
   private
 
   def feedback_for(score)
     case score
-    when 100    then ['🎉', 'Perfect!']
-    when 75..99 then ['👍', "Almost! (#{score}%)"]
-    when 50..74 then ['⚠️',  "Partially correct (#{score}%)"]
-    when 1..49  then ['❌', "Incorrect (#{score}%)"]
-    else             ['❌', 'No answer']
+    when 100    then MSGS[:feedback_perfect]
+    when 75..99 then MSGS[:feedback_almost].call(score)
+    when 50..74 then MSGS[:feedback_partial].call(score)
+    when 1..49  then MSGS[:feedback_wrong].call(score)
+    else             MSGS[:feedback_empty]
     end
   end
 

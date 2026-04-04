@@ -7,16 +7,27 @@ FactoryBot.define do
     preferred_language { 'en' }
   end
 
+  factory :word_group do
+    association :user
+    name_ru { 'Животные' }
+    name_de { 'Tiere' }
+  end
+
   factory :word do
     association :user
     sequence(:german_word) { |n| "Wort#{n}" }
     translation { 'word' }
     article     { nil }
+    word_group  { nil }
 
     trait :with_article do
       german_word { 'Hund' }
       article     { 'der' }
       translation { 'dog' }
+    end
+
+    trait :in_group do
+      association :word_group
     end
 
     # Word's after_create callback auto-creates a WordReview. Destroy it so

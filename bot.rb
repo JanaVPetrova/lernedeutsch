@@ -5,7 +5,10 @@ require_relative 'lib/boot'
 TOKEN = ENV.fetch('TELEGRAM_BOT_TOKEN') { raise 'TELEGRAM_BOT_TOKEN is not set' }
 
 MAIN_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
-  keyboard: [['German → Translation', 'Translation → German'], ['Upload Words', 'Set Reminder']],
+  keyboard: [
+    [MSGS[:btn_de_to_ru], MSGS[:btn_ru_to_de]],
+    [MSGS[:btn_upload],   MSGS[:btn_reminder]]
+  ],
   resize_keyboard: true
 )
 
@@ -18,35 +21,37 @@ def show_main_menu(bot, message)
   user = User.find_or_create_from_telegram(message.from)
   bot.api.send_message(
     chat_id: message.chat.id,
-    text: "Welcome back, #{user.display_name}! Choose what to do:",
+    text: MSGS[:welcome_back].call(user.display_name),
     reply_markup: MAIN_KEYBOARD
   )
 end
 
 def enter_upload_scene(bot, chat_id, session)
-  session[:scene] = :upload_words
-  bot.api.send_message(chat_id: chat_id, parse_mode: 'Markdown', text: <<~TEXT)
-    Send me your word list as a *.csv* or *.txt* file, or just paste the words here.
+  session[:scene]      = :upload_words
+  session[:scene_step] = :awaiting_name_ru
+  bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_ask_name_ru])
+end
 
-    Format – one pair per line:
-    ```
-    german_word,your_translation
-    der Hund,dog
-    die Katze,cat
-    gehen,to go
-    ```
-    The article (*der/die/das*) is optional.
-  TEXT
+def show_group_menu(bot, chat_id, user)
+  groups        = WordGroup.where(user: user).order(:name_ru)
+  has_ungrouped = Word.where(user: user, word_group_id: nil).exists?
+
+  options  = groups.map { |g| "#{g.name_ru} / #{g.name_de}" }
+  options << MSGS[:btn_no_group] if has_ungrouped
+  options << MSGS[:btn_all_words]
+
+  markup = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
+    keyboard: options.each_slice(2).to_a,
+    resize_keyboard: true,
+    one_time_keyboard: true
+  )
+  bot.api.send_message(chat_id: chat_id, text: MSGS[:pick_group_prompt], reply_markup: markup)
 end
 
 def enter_reminder_scene(bot, chat_id, session)
   session[:scene]      = :set_reminder
   session[:scene_step] = :awaiting_time
-  bot.api.send_message(
-    chat_id: chat_id,
-    parse_mode: 'Markdown',
-    text: "At what time should I remind you to study?\n\nPlease reply in *HH:MM* format (e.g. _09:00_ or _18:30_)."
-  )
+  bot.api.send_message(chat_id: chat_id, parse_mode: 'Markdown', text: MSGS[:reminder_ask_time])
 end
 
 # ── Bot ───────────────────────────────────────────────────────────────────────
@@ -77,7 +82,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         user = User.find_or_create_from_telegram(message.from)
         bot.api.send_message(
           chat_id: chat_id,
-          text: "👋 Hallo, #{user.display_name}! Let's learn some German.",
+          text: MSGS[:welcome].call(user.display_name),
           reply_markup: MAIN_KEYBOARD
         )
       when 'stop'
@@ -100,6 +105,34 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
     # ── Scene: upload_words ───────────────────────────────────────────────────
 
     if session[:scene] == :upload_words
+      if session[:scene_step] == :awaiting_name_ru
+        if text.nil? || text.strip.empty?
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_ask_name_ru_retry])
+          next
+        end
+
+        session[:upload_name_ru] = text.strip
+        session[:scene_step]     = :awaiting_name_de
+        bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_ask_name_de])
+        next
+      end
+
+      if session[:scene_step] == :awaiting_name_de
+        if text.nil? || text.strip.empty?
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_ask_name_de_retry])
+          next
+        end
+
+        session[:upload_name_de] = text.strip
+        session[:scene_step]     = :awaiting_words
+        bot.api.send_message(
+          chat_id: chat_id,
+          parse_mode: 'Markdown',
+          text: MSGS[:upload_ask_words].call(session[:upload_name_ru], session[:upload_name_de])
+        )
+        next
+      end
+
       user    = User.find_or_create_from_telegram(message.from)
       content = if message.document
                   WordImporter.download_document(message.document.file_id, TOKEN)
@@ -108,30 +141,31 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
                 end
 
       if content.nil? || content.strip.empty?
-        bot.api.send_message(
-          chat_id: chat_id,
-          text: "Couldn't read that. Please send a .csv/.txt file or paste your words directly."
-        )
+        bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_unreadable])
         session[:scene] = nil
         next
       end
 
       words_data = WordImporter.parse(content)
       if words_data.empty?
-        bot.api.send_message(
-          chat_id: chat_id,
-          text: "No valid word pairs found. Check the format (german,translation) and try again."
-        )
+        bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_no_pairs])
         session[:scene] = nil
         next
       end
 
-      count   = WordImporter.import(user, words_data)
+      word_group = WordGroup.create!(
+        user:    user,
+        name_ru: session[:upload_name_ru],
+        name_de: session[:upload_name_de]
+      )
+      count   = WordImporter.import(user, words_data, word_group: word_group)
       skipped = words_data.length - count
-      msg     = "✅ Added *#{count}* new word#{count == 1 ? '' : 's'}!"
-      msg    += "\n_(#{skipped} already existed and were skipped)_" if skipped > 0
+      msg     = MSGS[:upload_done].call(count, word_group.name_ru, word_group.name_de)
+      msg    += MSGS[:upload_skipped].call(skipped) if skipped > 0
       bot.api.send_message(chat_id: chat_id, text: msg, parse_mode: 'Markdown', reply_markup: MAIN_KEYBOARD)
-      session[:scene] = nil
+      session[:scene]          = nil
+      session[:upload_name_ru] = nil
+      session[:upload_name_de] = nil
       next
     end
 
@@ -141,32 +175,21 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       case session[:scene_step]
       when :awaiting_time
         unless text&.match?(/\A\d{2}:\d{2}\z/)
-          bot.api.send_message(
-            chat_id: chat_id,
-            text: "That doesn't look like a valid time. Please use HH:MM (e.g. 09:00)."
-          )
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:reminder_bad_time])
           session[:scene] = nil
           next
         end
 
         session[:reminder_time] = text.strip
         session[:scene_step]    = :awaiting_days
-        bot.api.send_message(
-          chat_id: chat_id,
-          parse_mode: 'Markdown',
-          text: "Great! Which days?\n\nType *all*, *weekdays*, *weekend*, or list specific days like _mon,wed,fri_."
-        )
+        bot.api.send_message(chat_id: chat_id, parse_mode: 'Markdown', text: MSGS[:reminder_ask_days])
 
       when :awaiting_days
-        user       = User.find_or_create_from_telegram(message.from)
-        days_input = text.strip.downcase
-        days       = Reminder.parse_days(days_input)
+        user = User.find_or_create_from_telegram(message.from)
+        days = Reminder.parse_days(text.strip.downcase)
 
         if days.empty?
-          bot.api.send_message(
-            chat_id: chat_id,
-            text: "I didn't recognise those days. Use: all, weekdays, weekend, or specific abbreviations like mon,tue,wed."
-          )
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:reminder_bad_days])
           session[:scene] = nil
           next
         end
@@ -174,17 +197,82 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         reminder = Reminder.find_or_initialize_by(user: user)
         reminder.update!(time: session[:reminder_time], days: days, enabled: true)
 
-        days_str = days_input == 'all' ? 'every day' : days.join(', ')
+        days_str = days.length == 7 ? 'каждый день' : days.join(', ')
         bot.api.send_message(
           chat_id: chat_id,
           parse_mode: 'Markdown',
-          text: "✅ Reminder set for *#{session[:reminder_time]}* on #{days_str}!",
+          text: MSGS[:reminder_done].call(session[:reminder_time], days_str),
           reply_markup: MAIN_KEYBOARD
         )
         session[:scene] = nil
       end
 
       next
+    end
+
+    # ── Scene: pick_group ─────────────────────────────────────────────────────
+
+    if session[:scene] == :pick_group
+      user   = User.find_or_create_from_telegram(message.from)
+      groups = WordGroup.where(user: user).order(:name_ru)
+      valid  = groups.map { |g| "#{g.name_ru} / #{g.name_de}" } + [MSGS[:btn_no_group], MSGS[:btn_all_words]]
+
+      unless valid.include?(text)
+        LOGGER.info("[nav] user=#{message.from.id} invalid group choice: #{text.inspect}")
+        next
+      end
+
+      chosen_group = case text
+                     when MSGS[:btn_all_words] then nil
+                     when MSGS[:btn_no_group]  then :ungrouped
+                     else groups.find { |g| "#{g.name_ru} / #{g.name_de}" == text }
+                     end
+
+      session[:scene]        = nil
+      session[:word_group]   = chosen_group
+      mode                   = session[:pending_mode]
+      session[:pending_mode] = nil
+
+      LOGGER.info("[nav] user=#{message.from.id} group=#{chosen_group.inspect} starting mode=#{mode}")
+      LearningHandler.new(bot, message, session).start(mode)
+      next
+    end
+
+    # ── Scene: edit_word ─────────────────────────────────────────────────────
+
+    if session[:scene] == :edit_word
+      review = WordReview.find_by(id: session[:edit_review_id])
+      unless review
+        session[:scene] = nil
+        next
+      end
+      word = review.word
+
+      if session[:scene_step] == :awaiting_translation
+        session[:edit_new_translation] = text.strip
+        session[:scene_step]           = :awaiting_german
+        bot.api.send_message(
+          chat_id: chat_id,
+          parse_mode: 'Markdown',
+          text: MSGS[:edit_ask_german].call(word.full_german)
+        )
+        next
+      end
+
+      if session[:scene_step] == :awaiting_german
+        article, german_word = WordImporter.split_article(text.strip)
+        if word.update(translation: session[:edit_new_translation], german_word: german_word, article: article)
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_done])
+        else
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_invalid_german])
+        end
+
+        session[:scene]                = nil
+        session[:edit_review_id]       = nil
+        session[:edit_new_translation] = nil
+        LearningHandler.new(bot, message, session).show_next_word
+        next
+      end
     end
 
     # ── Learning / main menu ──────────────────────────────────────────────────
@@ -194,16 +282,17 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       LearningHandler.new(bot, message, session).handle_answer
     else
       case text
-      when 'German → Translation'
-        LOGGER.info("[nav] user=#{message.from.id} starting learn_de_to_native")
-        LearningHandler.new(bot, message, session).start('learn_de_to_native')
-      when 'Translation → German'
-        LOGGER.info("[nav] user=#{message.from.id} starting learn_native_to_de")
-        LearningHandler.new(bot, message, session).start('learn_native_to_de')
-      when 'Upload Words'
+      when MSGS[:btn_de_to_ru], MSGS[:btn_ru_to_de]
+        mode = text == MSGS[:btn_de_to_ru] ? 'learn_de_to_native' : 'learn_native_to_de'
+        LOGGER.info("[nav] user=#{message.from.id} mode=#{mode} entering group picker")
+        user = User.find_or_create_from_telegram(message.from)
+        session[:scene]        = :pick_group
+        session[:pending_mode] = mode
+        show_group_menu(bot, chat_id, user)
+      when MSGS[:btn_upload]
         LOGGER.info("[nav] user=#{message.from.id} entering upload_words scene")
         enter_upload_scene(bot, chat_id, session)
-      when 'Set Reminder'
+      when MSGS[:btn_reminder]
         LOGGER.info("[nav] user=#{message.from.id} entering set_reminder scene")
         enter_reminder_scene(bot, chat_id, session)
       else
