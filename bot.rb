@@ -50,10 +50,8 @@ end
 
 def show_group_menu(bot, chat_id, user)
   groups        = WordGroup.order(:name_ru)
-  has_ungrouped = Word.where(user: user, word_group_id: nil).exists?
 
   options  = groups.map { |g| "#{g.name_ru} / #{g.name_de}" }
-  options << MSGS[:btn_no_group] if has_ungrouped
   options << MSGS[:btn_all_words]
 
   markup = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
