@@ -1,5 +1,6 @@
 require 'dotenv/load'
 require 'active_record'
+require 'telegram/bot'
 require 'yaml'
 require 'erb'
 require_relative 'msgs'
