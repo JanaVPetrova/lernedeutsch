@@ -1,3 +1,5 @@
+$stdout.sync = true
+
 require 'logger'
 require 'telegram/bot'
 require_relative 'lib/boot'
