@@ -2,7 +2,7 @@ require 'spec_helper'
 
 RSpec.describe SpacedRepetition do
   let(:user)   { create(:user) }
-  let(:word)   { create(:word, :with_article, user: user) }
+  let(:word)   { create(:word, :with_article) }
   let(:review) { create(:word_review, word: word, user: user) }
 
   describe '.update' do

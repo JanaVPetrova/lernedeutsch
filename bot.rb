@@ -6,8 +6,8 @@ TOKEN = ENV.fetch('TELEGRAM_BOT_TOKEN') { raise 'TELEGRAM_BOT_TOKEN is not set' 
 
 MAIN_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
   keyboard: [
-    [MSGS[:btn_de_to_ru], MSGS[:btn_ru_to_de]],
-    [MSGS[:btn_upload],   MSGS[:btn_reminder]]
+    [MSGS[:btn_de_to_ru],  MSGS[:btn_ru_to_de]],
+    [MSGS[:btn_upload],    MSGS[:btn_snoozed]]
   ],
   resize_keyboard: true
 )
@@ -26,14 +26,27 @@ def show_main_menu(bot, message)
   )
 end
 
-def enter_upload_scene(bot, chat_id, session)
-  session[:scene]      = :upload_words
-  session[:scene_step] = :awaiting_name_ru
-  bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_ask_name_ru])
+def enter_upload_scene(bot, chat_id, session, user)
+  session[:scene] = :upload_words
+  groups = WordGroup.order(:name_ru)
+
+  if groups.empty?
+    session[:scene_step] = :awaiting_name_ru
+    bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_ask_name_ru])
+  else
+    session[:scene_step] = :awaiting_group_pick
+    labels  = groups.map { |g| "#{g.name_ru} / #{g.name_de}" } + [MSGS[:btn_upload_new_group]]
+    markup  = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
+      keyboard: labels.each_slice(2).to_a,
+      resize_keyboard: true,
+      one_time_keyboard: true
+    )
+    bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_pick_group], reply_markup: markup)
+  end
 end
 
 def show_group_menu(bot, chat_id, user)
-  groups        = WordGroup.where(user: user).order(:name_ru)
+  groups        = WordGroup.order(:name_ru)
   has_ungrouped = Word.where(user: user, word_group_id: nil).exists?
 
   options  = groups.map { |g| "#{g.name_ru} / #{g.name_de}" }
@@ -93,7 +106,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         show_main_menu(bot, message)
       when 'upload'
         LOGGER.info("[nav] user=#{message.from.id} entering upload_words scene")
-        enter_upload_scene(bot, chat_id, session)
+        enter_upload_scene(bot, chat_id, session, User.find_or_create_from_telegram(message.from))
       when 'reminder'
         LOGGER.info("[nav] user=#{message.from.id} entering set_reminder scene")
         enter_reminder_scene(bot, chat_id, session)
@@ -105,6 +118,32 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
     # ── Scene: upload_words ───────────────────────────────────────────────────
 
     if session[:scene] == :upload_words
+      if session[:scene_step] == :awaiting_group_pick
+        user   = User.find_or_create_from_telegram(message.from)
+        groups = WordGroup.order(:name_ru)
+        valid  = groups.map { |g| "#{g.name_ru} / #{g.name_de}" } + [MSGS[:btn_upload_new_group]]
+
+        unless valid.include?(text)
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_pick_group])
+          next
+        end
+
+        if text == MSGS[:btn_upload_new_group]
+          session[:scene_step] = :awaiting_name_ru
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_ask_name_ru])
+        else
+          group = groups.find { |g| "#{g.name_ru} / #{g.name_de}" == text }
+          session[:upload_group_id] = group.id
+          session[:scene_step]      = :awaiting_words
+          bot.api.send_message(
+            chat_id: chat_id,
+            parse_mode: 'Markdown',
+            text: MSGS[:upload_ask_words].call(group.name_ru, group.name_de)
+          )
+        end
+        next
+      end
+
       if session[:scene_step] == :awaiting_name_ru
         if text.nil? || text.strip.empty?
           bot.api.send_message(chat_id: chat_id, text: MSGS[:upload_ask_name_ru_retry])
@@ -153,19 +192,23 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         next
       end
 
-      word_group = WordGroup.create!(
-        user:    user,
-        name_ru: session[:upload_name_ru],
-        name_de: session[:upload_name_de]
-      )
-      count   = WordImporter.import(user, words_data, word_group: word_group)
+      word_group = if session[:upload_group_id]
+                     WordGroup.find(session[:upload_group_id])
+                   else
+                     WordGroup.create!(
+                       name_ru: session[:upload_name_ru],
+                       name_de: session[:upload_name_de]
+                     )
+                   end
+      count   = WordImporter.import(words_data, word_group: word_group)
       skipped = words_data.length - count
       msg     = MSGS[:upload_done].call(count, word_group.name_ru, word_group.name_de)
       msg    += MSGS[:upload_skipped].call(skipped) if skipped > 0
       bot.api.send_message(chat_id: chat_id, text: msg, parse_mode: 'Markdown', reply_markup: MAIN_KEYBOARD)
-      session[:scene]          = nil
-      session[:upload_name_ru] = nil
-      session[:upload_name_de] = nil
+      session[:scene]           = nil
+      session[:upload_name_ru]  = nil
+      session[:upload_name_de]  = nil
+      session[:upload_group_id] = nil
       next
     end
 
@@ -214,7 +257,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
 
     if session[:scene] == :pick_group
       user   = User.find_or_create_from_telegram(message.from)
-      groups = WordGroup.where(user: user).order(:name_ru)
+      groups = WordGroup.order(:name_ru)
       valid  = groups.map { |g| "#{g.name_ru} / #{g.name_de}" } + [MSGS[:btn_no_group], MSGS[:btn_all_words]]
 
       unless valid.include?(text)
@@ -244,6 +287,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       review = WordReview.find_by(id: session[:edit_review_id])
       unless review
         session[:scene] = nil
+        session[:mode]  = session.delete(:edit_saved_mode)
         next
       end
       word = review.word
@@ -270,9 +314,53 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         session[:scene]                = nil
         session[:edit_review_id]       = nil
         session[:edit_new_translation] = nil
+        session[:mode]                 = session.delete(:edit_saved_mode)
         LearningHandler.new(bot, message, session).show_next_word
         next
       end
+    end
+
+    # ── Scene: snoozed_words ─────────────────────────────────────────────────
+
+    if session[:scene] == :snoozed_words
+      user    = User.find_or_create_from_telegram(message.from)
+      reviews = WordReview.snoozed_for_user(user).to_a
+      labels  = reviews.map { |r| r.word.full_german }
+      valid   = labels + [MSGS[:btn_back]]
+
+      unless valid.include?(text)
+        LOGGER.info("[nav] user=#{message.from.id} unknown snoozed pick: #{text.inspect}")
+        next
+      end
+
+      if text == MSGS[:btn_back]
+        session[:scene] = nil
+        show_main_menu(bot, message)
+        next
+      end
+
+      review = reviews.find { |r| r.word.full_german == text }
+      review.update!(snoozed: false, due_date: Date.today)
+      bot.api.send_message(
+        chat_id: chat_id,
+        parse_mode: 'Markdown',
+        text: MSGS[:unsnoozed_done].call(text)
+      )
+
+      # Refresh the list after unsnoozing
+      remaining = WordReview.snoozed_for_user(user).to_a
+      if remaining.empty?
+        bot.api.send_message(chat_id: chat_id, text: MSGS[:snoozed_list_empty], reply_markup: MAIN_KEYBOARD)
+        session[:scene] = nil
+      else
+        labels   = remaining.map { |r| r.word.full_german } + [MSGS[:btn_back]]
+        markup   = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
+          keyboard: labels.each_slice(2).to_a,
+          resize_keyboard: true
+        )
+        bot.api.send_message(chat_id: chat_id, text: MSGS[:snoozed_list_header], reply_markup: markup)
+      end
+      next
     end
 
     # ── Learning / main menu ──────────────────────────────────────────────────
@@ -291,10 +379,26 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         show_group_menu(bot, chat_id, user)
       when MSGS[:btn_upload]
         LOGGER.info("[nav] user=#{message.from.id} entering upload_words scene")
-        enter_upload_scene(bot, chat_id, session)
+        user = User.find_or_create_from_telegram(message.from)
+        enter_upload_scene(bot, chat_id, session, user)
       when MSGS[:btn_reminder]
         LOGGER.info("[nav] user=#{message.from.id} entering set_reminder scene")
         enter_reminder_scene(bot, chat_id, session)
+      when MSGS[:btn_snoozed]
+        LOGGER.info("[nav] user=#{message.from.id} entering snoozed_words scene")
+        user    = User.find_or_create_from_telegram(message.from)
+        reviews = WordReview.snoozed_for_user(user).to_a
+        if reviews.empty?
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:snoozed_list_empty], reply_markup: MAIN_KEYBOARD)
+        else
+          session[:scene] = :snoozed_words
+          labels  = reviews.map { |r| r.word.full_german } + [MSGS[:btn_back]]
+          markup  = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
+            keyboard: labels.each_slice(2).to_a,
+            resize_keyboard: true
+          )
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:snoozed_list_header], reply_markup: markup)
+        end
       else
         LOGGER.info("[nav] user=#{message.from.id} unhandled text: #{text.inspect}")
       end

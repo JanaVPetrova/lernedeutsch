@@ -26,7 +26,7 @@ RSpec.describe LearningHandler do
   # ── #start ──────────────────────────────────────────────────────────────────
 
   describe '#start' do
-    let(:word)    { create(:word, user: user) }
+    let(:word)    { create(:word) }
     let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
 
     it 'stores the mode in session' do
@@ -86,7 +86,7 @@ RSpec.describe LearningHandler do
     end
 
     context 'when a word is due' do
-      let(:word)    { create(:word, user: user, german_word: 'Hund', translation: 'собака') }
+      let(:word)    { create(:word, german_word: 'Hund', translation: 'собака') }
       let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
 
       before { session[:mode] = 'learn_de_to_native' }
@@ -135,9 +135,9 @@ RSpec.describe LearningHandler do
     end
 
     context 'with a group filter' do
-      let(:group)         { create(:word_group, user: user) }
-      let(:word_in_group) { create(:word, user: user, word_group: group) }
-      let(:word_outside)  { create(:word, user: user, word_group: nil) }
+      let(:group)         { create(:word_group) }
+      let(:word_in_group) { create(:word, word_group: group) }
+      let(:word_outside)  { create(:word, word_group: nil) }
       let!(:review_in)    { create(:word_review, word: word_in_group, user: user, due_date: Date.today) }
       let!(:review_out)   { create(:word_review, word: word_outside,  user: user, due_date: Date.today - 1) }
 
@@ -172,7 +172,7 @@ RSpec.describe LearningHandler do
     end
 
     context 'with an active review' do
-      let(:word)    { create(:word, user: user, german_word: 'Katze', translation: 'кошка') }
+      let(:word)    { create(:word, german_word: 'Katze', translation: 'кошка') }
       let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
 
       before do
@@ -284,8 +284,9 @@ RSpec.describe LearningHandler do
           expect(session[:edit_review_id]).to eq(review.id)
         end
 
-        it 'sends the edit prompt with the current translation' do
+        it 'sends the edit prompt with both the German word and the current translation' do
           handler.handle_answer
+          expect(sent_messages.last[:text]).to include('Katze')
           expect(sent_messages.last[:text]).to include('кошка')
         end
 
@@ -313,7 +314,7 @@ RSpec.describe LearningHandler do
       end
 
       context 'in learn_native_to_de mode with article' do
-        let(:word)        { create(:word, :with_article, user: user) }
+        let(:word)        { create(:word, :with_article) }
         let!(:review)     { create(:word_review, word: word, user: user, due_date: Date.today) }
         let(:answer_text) { 'der Hund' }
 

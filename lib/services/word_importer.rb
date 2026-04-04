@@ -34,11 +34,11 @@ class WordImporter
     words
   end
 
-  # Persist words for a user, skipping duplicates. Returns count of new records.
-  def self.import(user, words_data, word_group: nil)
+  # Persist words globally, skipping duplicates. Returns count of new records.
+  def self.import(words_data, word_group: nil)
     count = 0
     words_data.each do |attrs|
-      word = Word.find_or_initialize_by(user: user, german_word: attrs[:german_word])
+      word = Word.find_or_initialize_by(german_word: attrs[:german_word])
       next unless word.new_record?
 
       word.article     = attrs[:article]

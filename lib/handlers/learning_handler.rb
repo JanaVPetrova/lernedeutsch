@@ -1,6 +1,9 @@
 class LearningHandler
   LEARNING_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
-    keyboard: [[MSGS[:btn_skip], MSGS[:btn_report_mistake]]],
+    keyboard: [
+      [MSGS[:btn_skip], MSGS[:btn_snooze]],
+      [MSGS[:btn_report_mistake]], [MSGS[:btn_back]]
+    ],
     resize_keyboard: true
   )
 
@@ -59,6 +62,20 @@ class LearningHandler
     expected = @session[:mode] == 'learn_de_to_native' ? word.translation : word.full_german
 
     case @message.text
+    when MSGS[:btn_back]
+      @session[:mode]              = nil
+      @session[:current_review_id] = nil
+      @session[:reviewed_count]    = nil
+      @session[:word_group]        = nil
+      reply MSGS[:welcome_back].call(User.find_or_create_from_telegram(@message.from).display_name),
+            reply_markup: MAIN_KEYBOARD
+      return
+
+    when MSGS[:btn_snooze]
+      review.update!(snoozed: true)
+      reply MSGS[:snoozed_done], parse_mode: 'Markdown'
+      show_next_word
+
     when MSGS[:btn_skip]
       SpacedRepetition.update(review, 0)
       @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
@@ -67,10 +84,12 @@ class LearningHandler
       show_next_word
 
     when MSGS[:btn_report_mistake]
-      @session[:scene]          = :edit_word
-      @session[:scene_step]     = :awaiting_translation
-      @session[:edit_review_id] = @session[:current_review_id]
-      reply MSGS[:edit_ask_translation].call(word.translation),
+      @session[:scene]           = :edit_word
+      @session[:scene_step]      = :awaiting_translation
+      @session[:edit_review_id]  = @session[:current_review_id]
+      @session[:edit_saved_mode] = @session[:mode]
+      @session[:mode]            = nil
+      reply MSGS[:edit_ask_translation].call(word.full_german, word.translation),
             parse_mode: 'Markdown',
             reply_markup: Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
 

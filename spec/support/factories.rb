@@ -8,13 +8,11 @@ FactoryBot.define do
   end
 
   factory :word_group do
-    association :user
     name_ru { 'Животные' }
     name_de { 'Tiere' }
   end
 
   factory :word do
-    association :user
     sequence(:german_word) { |n| "Wort#{n}" }
     translation { 'word' }
     article     { nil }
@@ -29,11 +27,6 @@ FactoryBot.define do
     trait :in_group do
       association :word_group
     end
-
-    # Word's after_create callback auto-creates a WordReview. Destroy it so
-    # specs can build their own review with explicit attributes via the
-    # :word_review factory without hitting the unique-index violation.
-    after(:create) { |word| word.word_review&.destroy }
   end
 
   factory :word_review do
@@ -43,6 +36,7 @@ FactoryBot.define do
     ease_factor { 2.5 }
     interval    { 1 }
     due_date    { Date.today }
+    snoozed     { false }
   end
 
   factory :reminder do

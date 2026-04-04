@@ -1,35 +1,33 @@
 require 'spec_helper'
 
 RSpec.describe WordGroup do
-  let(:user) { create(:user) }
-
   describe 'validations' do
-    it 'is valid with name_ru, name_de, and user' do
-      group = build(:word_group, user: user)
-      expect(group).to be_valid
+    it 'is valid with name_ru and name_de' do
+      expect(build(:word_group)).to be_valid
     end
 
     it 'is invalid without name_ru' do
-      group = build(:word_group, user: user, name_ru: nil)
-      expect(group).not_to be_valid
+      expect(build(:word_group, name_ru: nil)).not_to be_valid
     end
 
     it 'is invalid without name_de' do
-      group = build(:word_group, user: user, name_de: nil)
-      expect(group).not_to be_valid
-    end
-
-    it 'is invalid without user' do
-      group = build(:word_group, user: nil)
-      expect(group).not_to be_valid
+      expect(build(:word_group, name_de: nil)).not_to be_valid
     end
   end
 
   describe 'associations' do
-    it 'destroys associated words when deleted' do
-      group = create(:word_group, user: user)
-      create(:word, user: user, word_group: group)
-      expect { group.destroy }.to change(Word, :count).by(-1)
+    it 'nullifies word_group_id on words when deleted' do
+      group = create(:word_group)
+      word  = create(:word, word_group: group)
+      group.destroy
+      expect(word.reload.word_group).to be_nil
+    end
+
+    it 'is shared across users' do
+      group  = create(:word_group)
+      create(:word, word_group: group)
+      create(:word, word_group: group)
+      expect(group.words.count).to eq(2)
     end
   end
 end

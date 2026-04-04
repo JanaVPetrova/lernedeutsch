@@ -1,8 +1,6 @@
 require 'spec_helper'
 
 RSpec.describe WordImporter do
-  let(:user) { create(:user) }
-
   # ── .split_article ───────────────────────────────────────────────────────────
 
   describe '.split_article' do
@@ -88,39 +86,39 @@ RSpec.describe WordImporter do
   describe '.import' do
     let(:words_data) do
       [
-        { german_word: 'Hund',    article: 'der', translation: 'dog'  },
-        { german_word: 'Katze',   article: 'die', translation: 'cat'  },
-        { german_word: 'schlafen', article: nil,  translation: 'sleep' }
+        { german_word: 'Hund',     article: 'der', translation: 'dog'   },
+        { german_word: 'Katze',    article: 'die', translation: 'cat'   },
+        { german_word: 'schlafen', article: nil,   translation: 'sleep' }
       ]
     end
 
     it 'creates new word records' do
-      expect { described_class.import(user, words_data) }.to change(Word, :count).by(3)
+      expect { described_class.import(words_data) }.to change(Word, :count).by(3)
     end
 
     it 'returns the count of created words' do
-      expect(described_class.import(user, words_data)).to eq(3)
+      expect(described_class.import(words_data)).to eq(3)
     end
 
     it 'persists the article' do
-      described_class.import(user, words_data)
-      expect(Word.find_by(user: user, german_word: 'Hund').article).to eq('der')
+      described_class.import(words_data)
+      expect(Word.find_by(german_word: 'Hund').article).to eq('der')
     end
 
-    it 'skips words that already exist for the user' do
-      described_class.import(user, words_data)
-      expect(described_class.import(user, words_data)).to eq(0)
+    it 'skips words that already exist globally' do
+      described_class.import(words_data)
+      expect(described_class.import(words_data)).to eq(0)
     end
 
     it 'assigns the word_group when provided' do
-      group = create(:word_group, user: user)
-      described_class.import(user, words_data, word_group: group)
-      expect(Word.where(user: user).map(&:word_group).uniq).to eq([group])
+      group = create(:word_group)
+      described_class.import(words_data, word_group: group)
+      expect(Word.all.map(&:word_group).uniq).to eq([group])
     end
 
     it 'leaves word_group nil when not provided' do
-      described_class.import(user, words_data)
-      expect(Word.where(user: user).map(&:word_group).uniq).to eq([nil])
+      described_class.import(words_data)
+      expect(Word.all.map(&:word_group).uniq).to eq([nil])
     end
   end
 end
