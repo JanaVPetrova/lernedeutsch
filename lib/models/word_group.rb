@@ -4,4 +4,5 @@ class WordGroup < ActiveRecord::Base
 
   validates :name_ru, presence: true
   validates :name_de, presence: true
+  validates :user, presence: true
 end

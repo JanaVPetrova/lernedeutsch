@@ -2,6 +2,7 @@ require 'dotenv/load'
 require 'active_record'
 require 'yaml'
 require 'erb'
+require 'uri'
 
 def db_config
   env = ENV['RACK_ENV'] || 'development'
@@ -19,9 +20,10 @@ namespace :db do
   end
 
   task :create do
-    config = db_config
-    db_name = config['database']
-    establish_connection(config.merge('database' => 'postgres'))
+    config  = db_config
+    url     = URI.parse(config['url'])
+    db_name = url.path.delete_prefix('/')
+    establish_connection(config.merge('url' => "#{url.scheme}://#{url.userinfo}@#{url.host}:#{url.port}/postgres"))
     ActiveRecord::Base.connection.create_database(db_name)
     puts "Database '#{db_name}' created."
   rescue ActiveRecord::DatabaseAlreadyExists
@@ -38,10 +40,11 @@ namespace :db do
     ActiveRecord::MigrationContext.new('db/migrations').rollback
   end
 
-  task drop: :environment do
-    config = db_config
-    db_name = config['database']
-    establish_connection(config.merge('database' => 'postgres'))
+  task :drop do
+    config  = db_config
+    url     = URI.parse(config['url'])
+    db_name = url.path.delete_prefix('/')
+    establish_connection(config.merge('url' => "#{url.scheme}://#{url.userinfo}@#{url.host}:#{url.port}/postgres"))
     ActiveRecord::Base.connection.drop_database(db_name)
     puts "Database '#{db_name}' dropped."
   end

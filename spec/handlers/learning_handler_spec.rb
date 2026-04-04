@@ -252,7 +252,9 @@ RSpec.describe LearningHandler do
         end
 
         it 'updates the SRS with score 0' do
-          expect { handler.handle_answer }.to change { review.reload.repetitions }.to(0)
+          review.update!(repetitions: 3, interval: 10)
+          expect { handler.handle_answer }
+            .to change { review.reload.repetitions }.from(3).to(0)
             .and change { review.reload.due_date }
         end
 
