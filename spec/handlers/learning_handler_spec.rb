@@ -153,6 +153,19 @@ RSpec.describe LearningHandler do
     end
   end
 
+  # ── #start initialises session_results ──────────────────────────────────────
+
+  describe '#start' do
+    let(:word)    { create(:word) }
+    let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
+
+    it 'resets session_results to an empty array' do
+      session[:session_results] = [{ word: 'Alt', score: 50 }]
+      handler.start('learn_de_to_native')
+      expect(session[:session_results]).to eq([])
+    end
+  end
+
   # ── #handle_answer ───────────────────────────────────────────────────────────
 
   describe '#handle_answer' do
@@ -175,10 +188,16 @@ RSpec.describe LearningHandler do
       let(:word)    { create(:word, german_word: 'Katze', translation: 'кошка') }
       let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
 
+      # A second due word keeps the session alive after the first answer so
+      # assertions on session state don't race against clear_session.
+      let!(:word2)    { create(:word, german_word: 'Baum', translation: 'дерево') }
+      let!(:review2)  { create(:word_review, word: word2, user: user, due_date: Date.today) }
+
       before do
         session[:current_review_id] = review.id
         session[:mode]              = 'learn_de_to_native'
         session[:reviewed_count]    = 0
+        session[:session_results]   = []
       end
 
       # ── Perfect answer ────────────────────────────────────────────────────────
@@ -261,6 +280,87 @@ RSpec.describe LearningHandler do
         it 'increments reviewed_count' do
           handler.handle_answer
           expect(session[:reviewed_count]).to eq(1)
+        end
+      end
+
+      # ── Back button ───────────────────────────────────────────────────────────
+
+      context 'when the back button is pressed with no results yet' do
+        let(:answer_text) { MSGS[:btn_back] }
+
+        before { session[:session_results] = [] }
+
+        it 'sends the "no words answered" message' do
+          handler.handle_answer
+          expect(sent_messages.last[:text]).to eq(MSGS[:learn_session_none])
+        end
+
+        it 'returns to the main keyboard' do
+          handler.handle_answer
+          expect(sent_messages.last[:reply_markup]).to eq(MAIN_KEYBOARD)
+        end
+
+        it 'clears session mode and results' do
+          handler.handle_answer
+          expect(session[:mode]).to be_nil
+          expect(session[:session_results]).to be_nil
+        end
+      end
+
+      context 'when the back button is pressed after some answers' do
+        let(:answer_text) { MSGS[:btn_back] }
+
+        before do
+          session[:session_results] = [
+            { word: 'Katze', score: 100 },
+            { word: 'Hund',  score: 0   },
+            { word: 'gehen', score: 75  }
+          ]
+        end
+
+        it 'sends the stats message' do
+          handler.handle_answer
+          text = sent_messages.last[:text]
+          expect(text).to include('Katze')
+          expect(text).to include('Hund')
+          expect(text).to include('gehen')
+        end
+
+        it 'shows the correct icon for each score' do
+          handler.handle_answer
+          text = sent_messages.last[:text]
+          expect(text).to include('🎉')
+          expect(text).to include('⏭')
+          expect(text).to include('👍')
+        end
+
+        it 'returns to the main keyboard' do
+          handler.handle_answer
+          expect(sent_messages.last[:reply_markup]).to eq(MAIN_KEYBOARD)
+        end
+      end
+
+      # ── Record results ────────────────────────────────────────────────────────
+
+      context 'recording results' do
+        before { session[:session_results] = [] }
+
+        it 'records the word and score on a normal answer' do
+          allow(message).to receive(:text).and_return('кошка')
+          handler.handle_answer
+          expect(session[:session_results].first).to include(word: 'Katze', score: 100)
+        end
+
+        it 'records score 0 on skip' do
+          allow(message).to receive(:text).and_return(MSGS[:btn_skip])
+          handler.handle_answer
+          expect(session[:session_results].first).to include(word: 'Katze', score: 0)
+        end
+
+        it 'does not record a result on snooze' do
+          allow(message).to receive(:text).and_return(MSGS[:btn_snooze])
+          handler.handle_answer
+          expect(session[:session_results]).to be_empty
         end
       end
 

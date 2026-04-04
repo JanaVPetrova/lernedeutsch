@@ -14,6 +14,7 @@ MAIN_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
 
 SESSIONS = Hash.new { |h, k| h[k] = {} }
 LOGGER   = Logger.new($stdout)
+LOGGER.level = Logger::INFO
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

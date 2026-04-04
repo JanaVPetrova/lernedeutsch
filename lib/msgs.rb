@@ -59,6 +59,20 @@ MSGS = {
   learn_all_done:        ->(n) { "Готово! Ты повторил #{n} #{pluralize_ru(n, 'слово', 'слова', 'слов')} сегодня. Отлично! 🎉" },
   learn_no_words:        'Слов для повторения пока нет. Возвращайся позже! ⏰',
   learn_correct_answer:  ->(answer) { "Правильный ответ: *#{answer}*" },
+  learn_session_stats:   ->(rows) {
+    header = "📊 *Итоги сессии*\n\n"
+    header + rows.map { |r|
+      icon = case r[:score]
+             when 100    then '🎉'
+             when 75..99 then '👍'
+             when 50..74 then '⚠️'
+             when 1..49  then '❌'
+             else             '⏭'
+             end
+      "#{icon} #{r[:word]} — #{r[:score]}%"
+    }.join("\n")
+  },
+  learn_session_none:    'Ты не успел ответить ни на одно слово.',
 
   # ── Learning keyboard buttons ──────────────────────────────────────────────
   btn_skip:           'Пропустить',

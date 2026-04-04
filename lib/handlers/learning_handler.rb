@@ -15,8 +15,9 @@ class LearningHandler
   end
 
   def start(mode)
-    @session[:mode]           = mode
-    @session[:reviewed_count] = 0
+    @session[:mode]            = mode
+    @session[:reviewed_count]  = 0
+    @session[:session_results] = []
     show_next_word
   end
 
@@ -29,8 +30,7 @@ class LearningHandler
       reviewed = @session[:reviewed_count] || 0
       msg = reviewed > 0 ? MSGS[:learn_all_done].call(reviewed) : MSGS[:learn_no_words]
       reply msg, reply_markup: MAIN_KEYBOARD
-      @session[:mode]              = nil
-      @session[:current_review_id] = nil
+      clear_session
       return
     end
 
@@ -63,13 +63,7 @@ class LearningHandler
 
     case @message.text
     when MSGS[:btn_back]
-      @session[:mode]              = nil
-      @session[:current_review_id] = nil
-      @session[:reviewed_count]    = nil
-      @session[:word_group]        = nil
-      reply MSGS[:welcome_back].call(User.find_or_create_from_telegram(@message.from).display_name),
-            reply_markup: MAIN_KEYBOARD
-      return
+      show_stats_and_return
 
     when MSGS[:btn_snooze]
       review.update!(snoozed: true)
@@ -78,6 +72,7 @@ class LearningHandler
 
     when MSGS[:btn_skip]
       SpacedRepetition.update(review, 0)
+      record_result(word, 0)
       @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
       reply "#{MSGS[:feedback_empty]}\n#{MSGS[:learn_correct_answer].call(expected)}",
             parse_mode: 'Markdown'
@@ -96,6 +91,7 @@ class LearningHandler
     else
       score = AnswerScorer.score(expected: expected, given: @message.text)
       SpacedRepetition.update(review, score)
+      record_result(word, score)
       @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
 
       text = feedback_for(score)
@@ -106,6 +102,30 @@ class LearningHandler
   end
 
   private
+
+  def record_result(word, score)
+    @session[:session_results] ||= []
+    @session[:session_results] << { word: word.full_german, score: score }
+  end
+
+  def show_stats_and_return
+    results = @session[:session_results] || []
+    msg = if results.empty?
+            MSGS[:learn_session_none]
+          else
+            MSGS[:learn_session_stats].call(results)
+          end
+    reply msg, parse_mode: 'Markdown', reply_markup: MAIN_KEYBOARD
+    clear_session
+  end
+
+  def clear_session
+    @session[:mode]              = nil
+    @session[:current_review_id] = nil
+    @session[:reviewed_count]    = nil
+    @session[:word_group]        = nil
+    @session[:session_results]   = nil
+  end
 
   def feedback_for(score)
     case score
