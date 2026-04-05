@@ -197,7 +197,9 @@ RSpec.describe WordReview do
       other = create(:user)
       w = create(:word, word_group: group)
       create(:word_review, word: w, user: other, last_score: 100)
-      expect(described_class.stats_for_user(user)).to be_empty
+      g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
+      expect(g[:unreviewed]).to eq(1)
+      expect(g[:perfect]).to eq(0)
     end
   end
 end
