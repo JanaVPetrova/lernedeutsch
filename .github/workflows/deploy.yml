@@ -5,8 +5,47 @@ on:
     branches: [main]
 
 jobs:
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lernedeutsch_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      RACK_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lernedeutsch_test
+      TELEGRAM_BOT_TOKEN: test_token_ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Migrate test database
+        run: bundle exec rake db:migrate
+
+      - name: Run E2E tests
+        run: bundle exec rspec spec/e2e/ --format progress
+
   deploy:
     name: Deploy (Kamal)
+    needs: e2e
     runs-on: ubuntu-latest
     permissions:
       contents: read
