@@ -37,6 +37,7 @@ FactoryBot.define do
     interval    { 1 }
     due_date    { Time.now }
     snoozed     { false }
+    last_score  { nil }
   end
 
   factory :reminder do

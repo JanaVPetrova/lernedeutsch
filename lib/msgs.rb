@@ -19,6 +19,7 @@ MSGS = {
   btn_upload:           'Загрузить слова',
   btn_reminder:         'Настроить напоминание',
   btn_snoozed:          'Стоп-лист',
+  btn_stats:            '📊 Статистика',
   btn_no_group:         'Без группы',
   btn_all_words:        'Все слова',
 
@@ -91,6 +92,23 @@ MSGS = {
     lines.join("\n")
   },
   learn_session_none:    'Ты не успел ответить ни на одно слово.',
+
+  # ── Global statistics ──────────────────────────────────────────────────────
+  stats_header:          "📊 *Статистика по группам*\n",
+  stats_no_data:         'Ещё нет данных — начни учить слова!',
+  stats_group:           ->(g) {
+    name = g[:name_de] ? "#{g[:name_ru]} / #{g[:name_de]}" : g[:name_ru]
+    reviewed = g[:total] - g[:unreviewed]
+    pct = ->(n) { g[:total] > 0 ? "#{(n * 100.0 / g[:total]).round}%" : '—' }
+    lines = ["*#{name}* (#{reviewed}/#{g[:total]} слов изучено)"]
+    lines << "  🎉 Идеально: #{pct.call(g[:perfect])}"   if g[:perfect]   > 0
+    lines << "  👍 Почти: #{pct.call(g[:almost])}"       if g[:almost]    > 0
+    lines << "  ⚠️ Частично: #{pct.call(g[:partial])}"  if g[:partial]   > 0
+    lines << "  ❌ Неверно: #{pct.call(g[:wrong])}"      if g[:wrong]     > 0
+    lines << "  ⏭ Пропущено: #{pct.call(g[:skipped])}"  if g[:skipped]   > 0
+    lines << "  ○ Не изучено: #{g[:unreviewed]}"         if g[:unreviewed] > 0
+    lines.join("\n")
+  },
 
   # ── Learning keyboard buttons ──────────────────────────────────────────────
   btn_skip:           'Пропустить',

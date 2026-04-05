@@ -9,7 +9,8 @@ TOKEN = ENV.fetch('TELEGRAM_BOT_TOKEN') { raise 'TELEGRAM_BOT_TOKEN is not set' 
 MAIN_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
   keyboard: [
     [MSGS[:btn_de_to_ru],  MSGS[:btn_ru_to_de]],
-    [MSGS[:btn_upload],    MSGS[:btn_snoozed]]
+    [MSGS[:btn_upload],    MSGS[:btn_snoozed]],
+    [MSGS[:btn_stats]]
   ],
   resize_keyboard: true
 )
@@ -398,6 +399,20 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       when MSGS[:btn_reminder]
         LOGGER.info("[nav] user=#{message.from.id} entering set_reminder scene")
         enter_reminder_scene(bot, chat_id, session)
+      when MSGS[:btn_stats]
+        LOGGER.info("[nav] user=#{message.from.id} requested stats")
+        user   = User.find_or_create_from_telegram(message.from)
+        groups = WordReview.stats_for_user(user).reject { |g| g[:total] == 0 }
+        if groups.empty?
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:stats_no_data])
+        else
+          body = groups.map { |g| MSGS[:stats_group].call(g) }.join("\n\n")
+          bot.api.send_message(
+            chat_id: chat_id,
+            parse_mode: 'Markdown',
+            text: "#{MSGS[:stats_header]}\n#{body}"
+          )
+        end
       when MSGS[:btn_snoozed]
         LOGGER.info("[nav] user=#{message.from.id} entering snoozed_words scene")
         user    = User.find_or_create_from_telegram(message.from)

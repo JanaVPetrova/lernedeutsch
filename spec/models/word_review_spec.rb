@@ -151,4 +151,53 @@ RSpec.describe WordReview do
       expect(described_class.due_count_for_user(user, group: group)).to eq(1)
     end
   end
+
+  describe '.stats_for_user' do
+    let(:group) { create(:word_group) }
+
+    it 'returns an entry per group' do
+      w1 = create(:word, word_group: group)
+      w2 = create(:word, word_group: nil)
+      create(:word_review, word: w1, user: user, last_score: 100)
+      create(:word_review, word: w2, user: user, last_score: 0)
+      stats = described_class.stats_for_user(user)
+      expect(stats.map { |g| g[:name_ru] }).to include(group.name_ru, '(без группы)')
+    end
+
+    it 'counts perfect scores' do
+      w = create(:word, word_group: group)
+      create(:word_review, word: w, user: user, last_score: 100)
+      g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
+      expect(g[:perfect]).to eq(1)
+      expect(g[:almost]).to eq(0)
+    end
+
+    it 'counts almost scores (75–99)' do
+      w = create(:word, word_group: group)
+      create(:word_review, word: w, user: user, last_score: 80)
+      g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
+      expect(g[:almost]).to eq(1)
+    end
+
+    it 'counts skipped (score 0)' do
+      w = create(:word, word_group: group)
+      create(:word_review, word: w, user: user, last_score: 0)
+      g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
+      expect(g[:skipped]).to eq(1)
+    end
+
+    it 'counts unreviewed words (last_score nil)' do
+      w = create(:word, word_group: group)
+      create(:word_review, word: w, user: user, last_score: nil)
+      g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
+      expect(g[:unreviewed]).to eq(1)
+    end
+
+    it 'only shows stats for the given user' do
+      other = create(:user)
+      w = create(:word, word_group: group)
+      create(:word_review, word: w, user: other, last_score: 100)
+      expect(described_class.stats_for_user(user)).to be_empty
+    end
+  end
 end

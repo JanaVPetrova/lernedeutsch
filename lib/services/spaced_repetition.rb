@@ -40,6 +40,7 @@ class SpacedRepetition
       @review.due_date = Time.now + @review.interval * 3600
     end
 
+    @review.last_score = score
     @review.save!
     @review
   end
