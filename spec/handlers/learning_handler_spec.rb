@@ -364,39 +364,47 @@ RSpec.describe LearningHandler do
         end
       end
 
-      # ── Report mistake button ─────────────────────────────────────────────────
+      # ── #handle_report_mistake (inline callback) ─────────────────────────────
 
-      context 'when the report-mistake button is pressed' do
-        let(:answer_text) { MSGS[:btn_report_mistake] }
-
+      describe '#handle_report_mistake' do
         it 'sets session scene to :edit_word' do
-          handler.handle_answer
+          handler.handle_report_mistake(review.id)
           expect(session[:scene]).to eq(:edit_word)
         end
 
         it 'sets scene_step to :awaiting_translation' do
-          handler.handle_answer
+          handler.handle_report_mistake(review.id)
           expect(session[:scene_step]).to eq(:awaiting_translation)
         end
 
-        it 'stores the review id in session' do
-          handler.handle_answer
+        it 'stores the given review id in session' do
+          handler.handle_report_mistake(review.id)
           expect(session[:edit_review_id]).to eq(review.id)
         end
 
+        it 'can edit any arbitrary past review by id' do
+          handler.handle_report_mistake(review2.id)
+          expect(session[:edit_review_id]).to eq(review2.id)
+        end
+
         it 'sends the edit prompt with both the German word and the current translation' do
-          handler.handle_answer
+          handler.handle_report_mistake(review.id)
           expect(sent_messages.last[:text]).to include('Katze')
           expect(sent_messages.last[:text]).to include('кошка')
         end
 
         it 'removes the learning keyboard during editing' do
-          handler.handle_answer
+          handler.handle_report_mistake(review.id)
           expect(sent_messages.last[:reply_markup]).to be_a(Telegram::Bot::Types::ReplyKeyboardRemove)
         end
 
         it 'does not update the SRS record' do
-          expect { handler.handle_answer }.not_to change { review.reload.due_date }
+          expect { handler.handle_report_mistake(review.id) }.not_to change { review.reload.due_date }
+        end
+
+        it 'does nothing when the review id does not exist' do
+          handler.handle_report_mistake(-1)
+          expect(session[:scene]).to be_nil
         end
       end
 

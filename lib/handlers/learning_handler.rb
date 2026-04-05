@@ -2,10 +2,21 @@ class LearningHandler
   LEARNING_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
     keyboard: [
       [MSGS[:btn_skip], MSGS[:btn_snooze]],
-      [MSGS[:btn_report_mistake]], [MSGS[:btn_back]]
+      [MSGS[:btn_back]]
     ],
     resize_keyboard: true
   )
+
+  def self.report_button(review_id)
+    Telegram::Bot::Types::InlineKeyboardMarkup.new(
+      inline_keyboard: [[
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text:          MSGS[:btn_report_mistake],
+          callback_data: "report_mistake:#{review_id}"
+        )
+      ]]
+    )
+  end
 
   def initialize(bot, message, session)
     @bot     = bot
@@ -73,20 +84,12 @@ class LearningHandler
     when MSGS[:btn_skip]
       SpacedRepetition.update(review, 0)
       record_result(word, 0)
-      @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
+      @session[:reviewed_count]          = (@session[:reviewed_count] || 0) + 1
+      @session[:last_answered_review_id] = review.id
       reply "#{MSGS[:feedback_empty]}\n#{MSGS[:learn_correct_answer].call(expected)}",
-            parse_mode: 'Markdown'
-      show_next_word
-
-    when MSGS[:btn_report_mistake]
-      @session[:scene]           = :edit_word
-      @session[:scene_step]      = :awaiting_translation
-      @session[:edit_review_id]  = @session[:current_review_id]
-      @session[:edit_saved_mode] = @session[:mode]
-      @session[:mode]            = nil
-      reply MSGS[:edit_ask_translation].call(word.full_german, word.translation),
             parse_mode: 'Markdown',
-            reply_markup: Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
+            reply_markup: LearningHandler.report_button(review.id)
+      show_next_word
 
     else
       score = AnswerScorer.score(expected: expected, given: @message.text)
@@ -96,9 +99,24 @@ class LearningHandler
 
       text = feedback_for(score)
       text += "\n#{MSGS[:learn_correct_answer].call(expected)}" if score < 100
-      reply text, parse_mode: 'Markdown'
+      reply text, parse_mode: 'Markdown', reply_markup: LearningHandler.report_button(review.id)
       show_next_word
     end
+  end
+
+  def handle_report_mistake(review_id)
+    target_review = WordReview.find_by(id: review_id)
+    return unless target_review
+
+    word = target_review.word
+    @session[:scene]           = :edit_word
+    @session[:scene_step]      = :awaiting_translation
+    @session[:edit_review_id]  = review_id
+    @session[:edit_saved_mode] = @session[:mode]
+    @session[:mode]            = nil
+    reply MSGS[:edit_ask_translation].call(word.full_german, word.translation),
+          parse_mode: 'Markdown',
+          reply_markup: Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
   end
 
   private

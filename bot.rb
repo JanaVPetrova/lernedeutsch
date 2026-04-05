@@ -74,6 +74,19 @@ ReminderScheduler.start(TOKEN)
 
 Telegram::Bot::Client.run(TOKEN) do |bot|
   bot.listen do |message|
+    if message.is_a?(Telegram::Bot::Types::CallbackQuery)
+      session = SESSIONS[message.from.id]
+      LOGGER.info("[callback] user=#{message.from.id} data=#{message.data.inspect}")
+      bot.api.answer_callback_query(callback_query_id: message.id)
+
+      if message.data&.start_with?('report_mistake:')
+        review_id = message.data.split(':').last.to_i
+        fake_msg  = message.message.tap { |m| m.instance_variable_set(:@from, message.from) }
+        LearningHandler.new(bot, fake_msg, session).handle_report_mistake(review_id)
+      end
+      next
+    end
+
     next unless message.is_a?(Telegram::Bot::Types::Message)
     next unless message.from
 
