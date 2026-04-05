@@ -7,7 +7,7 @@ class WordReview < ActiveRecord::Base
   validates :repetitions, numericality: { greater_than_or_equal_to: 0, only_integer: true }
   validates :interval,    numericality: { greater_than: 0, only_integer: true }
 
-  scope :due,      -> { where('due_date <= ?', Date.today) }
+  scope :due,      -> { where('due_date <= ?', Time.now) }
   scope :for_user, ->(user) { where(user: user) }
   scope :active,   -> { where(snoozed: false) }
   scope :snoozed,  -> { where(snoozed: true) }
@@ -39,7 +39,7 @@ class WordReview < ActiveRecord::Base
       WordReview.create!(
         word:        word,
         user:        user,
-        due_date:    Date.today,
+        due_date:    Time.now,
         repetitions: 0,
         ease_factor: 2.5,
         interval:    1,

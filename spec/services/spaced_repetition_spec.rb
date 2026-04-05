@@ -17,7 +17,7 @@ RSpec.describe SpacedRepetition do
 
       it 'sets due_date in the future' do
         update
-        expect(review.due_date).to be > Date.today
+        expect(review.due_date).to be > Time.now
       end
 
       it 'keeps ease_factor at or above minimum' do
@@ -49,9 +49,9 @@ RSpec.describe SpacedRepetition do
         expect(review.interval).to eq(1)
       end
 
-      it 'schedules due_date for tomorrow' do
+      it 'schedules due_date at or before now so the word reappears immediately' do
         update
-        expect(review.due_date).to eq(Date.today + 1)
+        expect(review.due_date).to be <= Time.now
       end
     end
 
@@ -65,29 +65,34 @@ RSpec.describe SpacedRepetition do
       end
     end
 
-    context 'interval progression' do
-      it 'uses interval=1 after first success' do
-        described_class.update(review, 100)
-        expect(review.interval).to eq(1)
-      end
-
-      it 'uses interval=6 after second success' do
-        review.update!(repetitions: 1, interval: 1)
+    context 'interval progression (in hours)' do
+      it 'uses interval=6 (hours) after first success' do
         described_class.update(review, 100)
         expect(review.interval).to eq(6)
       end
 
-      it 'multiplies by ease_factor after third+ success' do
-        review.update!(repetitions: 2, interval: 6, ease_factor: 2.5)
+      it 'uses interval=24 (hours) after second success' do
+        review.update!(repetitions: 1, interval: 6)
         described_class.update(review, 100)
-        expect(review.interval).to eq(15)  # (6 * 2.5).round
+        expect(review.interval).to eq(24)
+      end
+
+      it 'multiplies by ease_factor after third+ success' do
+        review.update!(repetitions: 2, interval: 24, ease_factor: 2.5)
+        described_class.update(review, 100)
+        expect(review.interval).to eq(60)  # (24 * 2.5).round
+      end
+
+      it 'schedules due_date ~6 hours ahead after first success' do
+        described_class.update(review, 100)
+        expect(review.due_date).to be_within(60).of(Time.now + 6 * 3600)
       end
     end
 
     context 'ease_factor floor' do
       it 'never drops below MIN_EASE_FACTOR' do
         review.update!(ease_factor: 1.3)
-        described_class.update(review, 60)  # quality=3, barely passing
+        described_class.update(review, 60)
         expect(review.ease_factor).to be >= SpacedRepetition::MIN_EASE_FACTOR
       end
     end

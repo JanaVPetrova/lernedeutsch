@@ -27,7 +27,7 @@ RSpec.describe LearningHandler do
 
   describe '#start' do
     let(:word)    { create(:word) }
-    let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
+    let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
 
     it 'stores the mode in session' do
       handler.start('learn_de_to_native')
@@ -87,7 +87,7 @@ RSpec.describe LearningHandler do
 
     context 'when a word is due' do
       let(:word)    { create(:word, german_word: 'Hund', translation: 'собака') }
-      let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
+      let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
 
       before { session[:mode] = 'learn_de_to_native' }
 
@@ -138,8 +138,8 @@ RSpec.describe LearningHandler do
       let(:group)         { create(:word_group) }
       let(:word_in_group) { create(:word, word_group: group) }
       let(:word_outside)  { create(:word, word_group: nil) }
-      let!(:review_in)    { create(:word_review, word: word_in_group, user: user, due_date: Date.today) }
-      let!(:review_out)   { create(:word_review, word: word_outside,  user: user, due_date: Date.today - 1) }
+      let!(:review_in)    { create(:word_review, word: word_in_group, user: user, due_date: Time.now) }
+      let!(:review_out)   { create(:word_review, word: word_outside,  user: user, due_date: Time.now - 3600) }
 
       before do
         session[:mode]       = 'learn_de_to_native'
@@ -157,7 +157,7 @@ RSpec.describe LearningHandler do
 
   describe '#start' do
     let(:word)    { create(:word) }
-    let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
+    let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
 
     it 'resets session_results to an empty array' do
       session[:session_results] = [{ word: 'Alt', score: 50 }]
@@ -186,12 +186,12 @@ RSpec.describe LearningHandler do
 
     context 'with an active review' do
       let(:word)    { create(:word, german_word: 'Katze', translation: 'кошка') }
-      let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
+      let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
 
       # A second due word keeps the session alive after the first answer so
       # assertions on session state don't race against clear_session.
       let!(:word2)    { create(:word, german_word: 'Baum', translation: 'дерево') }
-      let!(:review2)  { create(:word_review, word: word2, user: user, due_date: Date.today) }
+      let!(:review2)  { create(:word_review, word: word2, user: user, due_date: Time.now) }
 
       before do
         session[:current_review_id] = review.id
@@ -423,7 +423,7 @@ RSpec.describe LearningHandler do
 
       context 'in learn_native_to_de mode with article' do
         let(:word)        { create(:word, :with_article) }
-        let!(:review)     { create(:word_review, word: word, user: user, due_date: Date.today) }
+        let!(:review)     { create(:word_review, word: word, user: user, due_date: Time.now) }
         let(:answer_text) { 'der Hund' }
 
         before do

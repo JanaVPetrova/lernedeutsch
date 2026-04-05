@@ -18,7 +18,7 @@ MSGS = {
   btn_ru_to_de:         'Перевод → Немецкий',
   btn_upload:           'Загрузить слова',
   btn_reminder:         'Настроить напоминание',
-  btn_snoozed:          'Отложенные слова',
+  btn_snoozed:          'Стоп-лист',
   btn_no_group:         'Без группы',
   btn_all_words:        'Все слова',
 
@@ -76,7 +76,7 @@ MSGS = {
 
   # ── Learning keyboard buttons ──────────────────────────────────────────────
   btn_skip:           'Пропустить',
-  btn_snooze:         'Отложить',
+  btn_snooze:         'Не предлагать',
   btn_report_mistake: 'Сообщить об ошибке',
   btn_back:           '← Назад',
 
@@ -88,7 +88,7 @@ MSGS = {
   feedback_empty:    '❌ Пропущено',
 
   # ── Snooze ────────────────────────────────────────────────────────────────
-  snoozed_done:         '💤 Слово отложено.',
+  snoozed_done:         '💤 Слово не будет предлагаться.',
   btn_unsnooze:         '▶ Вернуть',
   snoozed_list_header:  'Отложенные слова. Нажми на слово, чтобы вернуть его в очередь:',
   snoozed_list_empty:   'Отложенных слов нет.',

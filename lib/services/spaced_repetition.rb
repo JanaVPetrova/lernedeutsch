@@ -8,9 +8,9 @@
 #   75–89 => 4  (correct with hesitation)
 #   90–100 => 5 (perfect)
 #
-# Intervals:
-#   repetitions=0 => 1 day
-#   repetitions=1 => 6 days
+# Intervals (in hours):
+#   repetitions=0 => 6 hours
+#   repetitions=1 => 24 hours
 #   repetitions>1 => interval * ease_factor
 class SpacedRepetition
   MIN_EASE_FACTOR = 1.3
@@ -29,6 +29,7 @@ class SpacedRepetition
     if quality < 3
       @review.repetitions = 0
       @review.interval    = 1
+      @review.due_date    = Time.now
     else
       @review.interval = next_interval
       @review.repetitions += 1
@@ -36,9 +37,9 @@ class SpacedRepetition
         (@review.ease_factor + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)).round(2),
         MIN_EASE_FACTOR
       ].max
+      @review.due_date = Time.now + @review.interval * 3600
     end
 
-    @review.due_date = Date.today + @review.interval
     @review.save!
     @review
   end
@@ -58,8 +59,8 @@ class SpacedRepetition
 
   def next_interval
     case @review.repetitions
-    when 0 then 1
-    when 1 then 6
+    when 0 then 6
+    when 1 then 24
     else        (@review.interval * @review.ease_factor).round
     end
   end

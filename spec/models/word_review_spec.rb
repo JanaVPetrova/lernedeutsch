@@ -51,7 +51,7 @@ RSpec.describe WordReview do
 
     context 'when a review exists and is due' do
       let(:word)    { create(:word) }
-      let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today) }
+      let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
 
       it 'returns the due review' do
         expect(described_class.next_for_user(user)).to eq(review)
@@ -60,7 +60,7 @@ RSpec.describe WordReview do
 
     context 'when a review is in the future' do
       let(:word) { create(:word) }
-      let!(:review) { create(:word_review, word: word, user: user, due_date: Date.today + 1) }
+      let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now + 3600) }
 
       it 'returns nil' do
         expect(described_class.next_for_user(user)).to be_nil
@@ -70,8 +70,8 @@ RSpec.describe WordReview do
     context 'returns a review from the earliest due_date batch' do
       let(:word1)  { create(:word) }
       let(:word2)  { create(:word) }
-      let!(:newer) { create(:word_review, word: word1, user: user, due_date: Date.today) }
-      let!(:older) { create(:word_review, word: word2, user: user, due_date: Date.today - 3) }
+      let!(:newer) { create(:word_review, word: word1, user: user, due_date: Time.now) }
+      let!(:older) { create(:word_review, word: word2, user: user, due_date: Time.now - 3*3600) }
 
       it 'never returns the newer one when an older one exists' do
         results = 10.times.map { described_class.next_for_user(user) }
@@ -83,8 +83,8 @@ RSpec.describe WordReview do
       let(:group)      { create(:word_group) }
       let(:word_in)    { create(:word, word_group: group) }
       let(:word_out)   { create(:word, word_group: nil) }
-      let!(:review_in) { create(:word_review, word: word_in,  user: user, due_date: Date.today) }
-      let!(:review_out){ create(:word_review, word: word_out, user: user, due_date: Date.today) }
+      let!(:review_in) { create(:word_review, word: word_in,  user: user, due_date: Time.now) }
+      let!(:review_out){ create(:word_review, word: word_out, user: user, due_date: Time.now) }
 
       it 'returns only the review for the given group' do
         expect(described_class.next_for_user(user, group: group)).to eq(review_in)
@@ -95,8 +95,8 @@ RSpec.describe WordReview do
       let(:group)            { create(:word_group) }
       let(:grouped_word)     { create(:word, word_group: group) }
       let(:ungrouped_word)   { create(:word, word_group: nil) }
-      let!(:grouped_review)  { create(:word_review, word: grouped_word,   user: user, due_date: Date.today) }
-      let!(:ungrouped_review){ create(:word_review, word: ungrouped_word, user: user, due_date: Date.today) }
+      let!(:grouped_review)  { create(:word_review, word: grouped_word,   user: user, due_date: Time.now) }
+      let!(:ungrouped_review){ create(:word_review, word: ungrouped_word, user: user, due_date: Time.now) }
 
       it 'returns only ungrouped words' do
         expect(described_class.next_for_user(user, group: :ungrouped)).to eq(ungrouped_review)
@@ -107,8 +107,8 @@ RSpec.describe WordReview do
       let(:group) { create(:word_group) }
       let(:word1) { create(:word, word_group: group) }
       let(:word2) { create(:word, word_group: nil) }
-      let!(:r1)   { create(:word_review, word: word1, user: user, due_date: Date.today - 1) }
-      let!(:r2)   { create(:word_review, word: word2, user: user, due_date: Date.today) }
+      let!(:r1)   { create(:word_review, word: word1, user: user, due_date: Time.now - 3600) }
+      let!(:r2)   { create(:word_review, word: word2, user: user, due_date: Time.now) }
 
       it 'returns the earliest across all groups' do
         expect(described_class.next_for_user(user, group: nil)).to eq(r1)
@@ -132,13 +132,13 @@ RSpec.describe WordReview do
     let(:word2) { create(:word) }
 
     it 'counts due reviews' do
-      create(:word_review, word: word1, user: user, due_date: Date.today)
-      create(:word_review, word: word2, user: user, due_date: Date.today + 1)
+      create(:word_review, word: word1, user: user, due_date: Time.now)
+      create(:word_review, word: word2, user: user, due_date: Time.now + 3600)
       expect(described_class.due_count_for_user(user)).to eq(1)
     end
 
     it 'returns 0 when nothing is due' do
-      create(:word_review, word: word1, user: user, due_date: Date.today + 5)
+      create(:word_review, word: word1, user: user, due_date: Time.now + 5*3600)
       expect(described_class.due_count_for_user(user)).to eq(0)
     end
 
@@ -146,8 +146,8 @@ RSpec.describe WordReview do
       group = create(:word_group)
       w_in  = create(:word, word_group: group)
       w_out = create(:word)
-      create(:word_review, word: w_in,  user: user, due_date: Date.today)
-      create(:word_review, word: w_out, user: user, due_date: Date.today)
+      create(:word_review, word: w_in,  user: user, due_date: Time.now)
+      create(:word_review, word: w_out, user: user, due_date: Time.now)
       expect(described_class.due_count_for_user(user, group: group)).to eq(1)
     end
   end

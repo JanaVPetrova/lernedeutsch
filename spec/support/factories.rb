@@ -35,7 +35,7 @@ FactoryBot.define do
     repetitions { 0 }
     ease_factor { 2.5 }
     interval    { 1 }
-    due_date    { Date.today }
+    due_date    { Time.now }
     snoozed     { false }
   end
 
