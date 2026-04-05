@@ -355,7 +355,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       end
 
       review = reviews.find { |r| r.word.full_german == text }
-      review.update!(snoozed: false, due_date: Date.today)
+      review.update!(snoozed: false)
       bot.api.send_message(
         chat_id: chat_id,
         parse_mode: 'Markdown',

@@ -32,17 +32,20 @@ class WordReview < ActiveRecord::Base
     apply_group(for_user(user).snoozed.joins(:word), group).order(:updated_at)
   end
 
-  # Returns an array of { name_ru:, name_de:, total:, perfect:, almost:, partial:, wrong:, skipped:, unreviewed: }
+  # Returns an array of { name_ru:, name_de:, total:, unreviewed:, box1:, box2:, box3:, box4:, box5: }
+  # Box distribution is the primary progress indicator; unreviewed = never practised (last_score nil).
   def self.stats_for_user(user)
     provision_missing(user, nil)
 
     rows = for_user(user).joins(word: :word_group).select(
       'word_groups.name_ru AS group_name_ru',
       'word_groups.name_de AS group_name_de',
+      'word_reviews.box',
       'word_reviews.last_score'
     ).to_a
 
     ungrouped_rows = for_user(user).joins(:word).where(words: { word_group_id: nil }).select(
+      'word_reviews.box',
       'word_reviews.last_score'
     ).to_a
 
@@ -56,16 +59,16 @@ class WordReview < ActiveRecord::Base
   def self.build_group_stats(name_ru, name_de, rows)
     total      = rows.size
     scores     = rows.map { |r| r.respond_to?(:last_score) ? r.last_score : r['last_score'] }
-    scored     = scores.compact
+    boxes      = rows.map { |r| (r.respond_to?(:box) ? r.box : r['box']).to_i }
     unreviewed = scores.count(&:nil?)
-    perfect    = scored.count { |s| s == 100 }
-    almost     = scored.count { |s| (75..99).cover?(s) }
-    partial    = scored.count { |s| (50..74).cover?(s) }
-    wrong      = scored.count { |s| (1..49).cover?(s) }
-    skipped    = scored.count { |s| s == 0 }
+    reviewed   = scores.each_with_index.reject { |s, _| s.nil? }.map { |_, i| boxes[i] }
     { name_ru: name_ru, name_de: name_de, total: total,
-      perfect: perfect, almost: almost, partial: partial,
-      wrong: wrong, skipped: skipped, unreviewed: unreviewed }
+      unreviewed: unreviewed,
+      box1: reviewed.count(1),
+      box2: reviewed.count(2),
+      box3: reviewed.count(3),
+      box4: reviewed.count(4),
+      box5: reviewed.count(5) }
   end
   private_class_method :build_group_stats
 

@@ -99,14 +99,13 @@ MSGS = {
   stats_group:           ->(g) {
     name = g[:name_de] ? "#{g[:name_ru]} / #{g[:name_de]}" : g[:name_ru]
     reviewed = g[:total] - g[:unreviewed]
-    pct = ->(n) { g[:total] > 0 ? "#{(n * 100.0 / g[:total]).round}%" : '—' }
     lines = ["*#{name}* (#{reviewed}/#{g[:total]} слов изучено)"]
-    lines << "  🎉 Идеально: #{pct.call(g[:perfect])}"   if g[:perfect]   > 0
-    lines << "  👍 Почти: #{pct.call(g[:almost])}"       if g[:almost]    > 0
-    lines << "  ⚠️ Частично: #{pct.call(g[:partial])}"  if g[:partial]   > 0
-    lines << "  ❌ Неверно: #{pct.call(g[:wrong])}"      if g[:wrong]     > 0
-    lines << "  ⏭ Пропущено: #{pct.call(g[:skipped])}"  if g[:skipped]   > 0
-    lines << "  ○ Не изучено: #{g[:unreviewed]}"         if g[:unreviewed] > 0
+    lines << "  🎉 Освоено: #{g[:box5]}"      if g[:box5]      > 0
+    lines << "  ✅ Уверенно: #{g[:box4]}"     if g[:box4]      > 0
+    lines << "  👍 Изучается: #{g[:box3]}"    if g[:box3]      > 0
+    lines << "  📖 Начало: #{g[:box2]}"       if g[:box2]      > 0
+    lines << "  ❌ Забытые: #{g[:box1]}"      if g[:box1]      > 0
+    lines << "  ○ Не изучено: #{g[:unreviewed]}" if g[:unreviewed] > 0
     lines.join("\n")
   },
 

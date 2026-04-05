@@ -341,13 +341,13 @@ RSpec.describe 'Bot user stories', type: :e2e do
       expect(msgs.last[:text]).to include('○ Не изучено: 1')
     end
 
-    it 'reflects a perfect score after answering correctly' do
+    it 'reflects progress in box 2 after answering correctly once' do
       receive(tg_user, text: MSGS[:btn_de_to_ru])
       receive(tg_user, text: MSGS[:btn_all_words])
       receive(tg_user, text: 'dog')
 
       msgs = receive(tg_user, text: MSGS[:btn_stats])
-      expect(msgs.last[:text]).to include('🎉 Идеально')
+      expect(msgs.last[:text]).to include('📖 Начало: 1')
     end
   end
 

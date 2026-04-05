@@ -134,32 +134,33 @@ RSpec.describe WordReview do
     it 'returns an entry per group' do
       w1 = create(:word, word_group: group)
       w2 = create(:word, word_group: nil)
-      create(:word_review, word: w1, user: user, last_score: 100)
-      create(:word_review, word: w2, user: user, last_score: 0)
+      create(:word_review, word: w1, user: user, box: 5, last_score: 100)
+      create(:word_review, word: w2, user: user, box: 1, last_score: 0)
       stats = described_class.stats_for_user(user)
       expect(stats.map { |g| g[:name_ru] }).to include(group.name_ru, '(без группы)')
     end
 
-    it 'counts perfect scores' do
+    it 'counts box 5 (mastered) words' do
       w = create(:word, word_group: group)
-      create(:word_review, word: w, user: user, last_score: 100)
+      create(:word_review, word: w, user: user, box: 5, last_score: 100)
       g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
-      expect(g[:perfect]).to eq(1)
-      expect(g[:almost]).to eq(0)
+      expect(g[:box5]).to eq(1)
+      expect(g[:box4]).to eq(0)
     end
 
-    it 'counts almost scores (75–99)' do
+    it 'counts box 3 (intermediate) words' do
       w = create(:word, word_group: group)
-      create(:word_review, word: w, user: user, last_score: 80)
+      create(:word_review, word: w, user: user, box: 3, last_score: 80)
       g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
-      expect(g[:almost]).to eq(1)
+      expect(g[:box3]).to eq(1)
     end
 
-    it 'counts skipped (score 0)' do
+    it 'counts box 1 reviewed words (forgotten/reset)' do
       w = create(:word, word_group: group)
-      create(:word_review, word: w, user: user, last_score: 0)
+      create(:word_review, word: w, user: user, box: 1, last_score: 0)
       g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
-      expect(g[:skipped]).to eq(1)
+      expect(g[:box1]).to eq(1)
+      expect(g[:unreviewed]).to eq(0)
     end
 
     it 'counts unreviewed words (last_score nil)' do
@@ -172,10 +173,10 @@ RSpec.describe WordReview do
     it 'only shows stats for the given user' do
       other = create(:user)
       w = create(:word, word_group: group)
-      create(:word_review, word: w, user: other, last_score: 100)
+      create(:word_review, word: w, user: other, box: 5, last_score: 100)
       g = described_class.stats_for_user(user).find { |s| s[:name_ru] == group.name_ru }
       expect(g[:unreviewed]).to eq(1)
-      expect(g[:perfect]).to eq(0)
+      expect(g[:box5]).to eq(0)
     end
   end
 end
