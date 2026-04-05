@@ -27,7 +27,7 @@ RSpec.describe LearningHandler do
 
   describe '#start' do
     let(:word)    { create(:word) }
-    let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
+    let!(:review) { create(:word_review, word: word, user: user, due_session: 0) }
 
     it 'stores the mode in session' do
       handler.start('learn_de_to_native')
@@ -44,13 +44,32 @@ RSpec.describe LearningHandler do
       handler.start('learn_de_to_native')
       expect(sent_messages).not_to be_empty
     end
+
+    it 'resets session_results to an empty array' do
+      session[:session_results] = [{ word: 'Alt', score: 50 }]
+      handler.start('learn_de_to_native')
+      expect(session[:session_results]).to eq([])
+    end
+
+    it 'increments sessions_completed on the user' do
+      expect { handler.start('learn_de_to_native') }
+        .to change { user.reload.sessions_completed }.by(1)
+    end
+
+    it 'builds the session queue' do
+      handler.start('learn_de_to_native')
+      expect(session[:queue]).to include(review.id)
+    end
   end
 
   # ── #show_next_word ──────────────────────────────────────────────────────────
 
   describe '#show_next_word' do
-    context 'when no words are due and none reviewed this session' do
-      before { session[:reviewed_count] = 0 }
+    context 'when queue is empty and none reviewed this session' do
+      before do
+        session[:reviewed_count] = 0
+        session[:queue]          = []
+      end
 
       it 'sends the "no words" message' do
         handler.show_next_word
@@ -63,7 +82,7 @@ RSpec.describe LearningHandler do
       end
 
       it 'clears mode and current_review_id from session' do
-        session[:mode] = 'learn_de_to_native'
+        session[:mode]              = 'learn_de_to_native'
         session[:current_review_id] = 42
         handler.show_next_word
         expect(session[:mode]).to be_nil
@@ -71,8 +90,11 @@ RSpec.describe LearningHandler do
       end
     end
 
-    context 'when no words are due but some were reviewed' do
-      before { session[:reviewed_count] = 3 }
+    context 'when queue is empty but some were reviewed' do
+      before do
+        session[:reviewed_count] = 3
+        session[:queue]          = []
+      end
 
       it 'sends the "all done" message with the count' do
         handler.show_next_word
@@ -85,11 +107,14 @@ RSpec.describe LearningHandler do
       end
     end
 
-    context 'when a word is due' do
+    context 'when a word is in the queue' do
       let(:word)    { create(:word, german_word: 'Hund', translation: 'собака') }
-      let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
+      let!(:review) { create(:word_review, word: word, user: user, due_session: 0) }
 
-      before { session[:mode] = 'learn_de_to_native' }
+      before do
+        session[:mode]  = 'learn_de_to_native'
+        session[:queue] = [review.id]
+      end
 
       it 'stores the review id in session' do
         handler.show_next_word
@@ -122,7 +147,7 @@ RSpec.describe LearningHandler do
         expect(sent_messages.last[:text]).to include('/stop')
       end
 
-      it 'includes the due count in the prompt' do
+      it 'includes the queue size in the prompt' do
         handler.show_next_word
         expect(sent_messages.last[:text]).to include(MSGS[:learn_progress].call(1))
       end
@@ -138,31 +163,19 @@ RSpec.describe LearningHandler do
       let(:group)         { create(:word_group) }
       let(:word_in_group) { create(:word, word_group: group) }
       let(:word_outside)  { create(:word, word_group: nil) }
-      let!(:review_in)    { create(:word_review, word: word_in_group, user: user, due_date: Time.now) }
-      let!(:review_out)   { create(:word_review, word: word_outside,  user: user, due_date: Time.now - 3600) }
+      let!(:review_in)    { create(:word_review, word: word_in_group, user: user, due_session: 0) }
+      let!(:review_out)   { create(:word_review, word: word_outside,  user: user, due_session: 0) }
 
       before do
         session[:mode]       = 'learn_de_to_native'
         session[:word_group] = group
+        session[:queue]      = [review_in.id]
       end
 
       it 'shows only the word in the selected group' do
         handler.show_next_word
         expect(session[:current_review_id]).to eq(review_in.id)
       end
-    end
-  end
-
-  # ── #start initialises session_results ──────────────────────────────────────
-
-  describe '#start' do
-    let(:word)    { create(:word) }
-    let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
-
-    it 'resets session_results to an empty array' do
-      session[:session_results] = [{ word: 'Alt', score: 50 }]
-      handler.start('learn_de_to_native')
-      expect(session[:session_results]).to eq([])
     end
   end
 
@@ -186,18 +199,18 @@ RSpec.describe LearningHandler do
 
     context 'with an active review' do
       let(:word)    { create(:word, german_word: 'Katze', translation: 'кошка') }
-      let!(:review) { create(:word_review, word: word, user: user, due_date: Time.now) }
+      let!(:review) { create(:word_review, word: word, user: user, due_session: 0) }
 
-      # A second due word keeps the session alive after the first answer so
-      # assertions on session state don't race against clear_session.
-      let!(:word2)    { create(:word, german_word: 'Baum', translation: 'дерево') }
-      let!(:review2)  { create(:word_review, word: word2, user: user, due_date: Time.now) }
+      # A second word in the queue keeps the session alive after the first answer.
+      let!(:word2)   { create(:word, german_word: 'Baum', translation: 'дерево') }
+      let!(:review2) { create(:word_review, word: word2, user: user, due_session: 0) }
 
       before do
         session[:current_review_id] = review.id
         session[:mode]              = 'learn_de_to_native'
         session[:reviewed_count]    = 0
         session[:session_results]   = []
+        session[:queue]             = [review.id, review2.id]
       end
 
       # ── Perfect answer ────────────────────────────────────────────────────────
@@ -220,26 +233,17 @@ RSpec.describe LearningHandler do
           expect(session[:reviewed_count]).to eq(1)
         end
 
-        it 'updates the spaced repetition record' do
-          expect { handler.handle_answer }.to change { review.reload.due_date }
+        it 'updates the SRS record (advances box and due_session)' do
+          expect { handler.handle_answer }.to change { review.reload.due_session }
+        end
+
+        it 'removes the word from the queue (no re-insertion on perfect)' do
+          handler.handle_answer
+          expect(session[:queue]).not_to include(review.id)
         end
       end
 
-      # ── Partial / wrong answer ────────────────────────────────────────────────
-
-      context 'with a partial answer' do
-        let(:answer_text) { 'кошки' }
-
-        it 'sends partial feedback' do
-          handler.handle_answer
-          expect(sent_messages.first[:text]).to match(/👍|⚠️|❌/)
-        end
-
-        it 'shows the correct answer' do
-          handler.handle_answer
-          expect(sent_messages.first[:text]).to include(MSGS[:learn_correct_answer].call('кошка'))
-        end
-      end
+      # ── Wrong answer ──────────────────────────────────────────────────────────
 
       context 'with a completely wrong answer' do
         let(:answer_text) { 'xyz' }
@@ -247,6 +251,27 @@ RSpec.describe LearningHandler do
         it 'sends the wrong-answer feedback' do
           handler.handle_answer
           expect(sent_messages.first[:text]).to include('❌')
+        end
+
+        it 'shows the correct answer' do
+          handler.handle_answer
+          expect(sent_messages.first[:text]).to include(MSGS[:learn_correct_answer].call('кошка'))
+        end
+
+        it 're-inserts the word into the queue at position 1' do
+          handler.handle_answer
+          expect(session[:queue][1]).to eq(review.id)
+        end
+      end
+
+      # ── Partial answer ────────────────────────────────────────────────────────
+
+      context 'with a partial answer' do
+        let(:answer_text) { 'кошки' }
+
+        it 'sends partial feedback' do
+          handler.handle_answer
+          expect(sent_messages.first[:text]).to match(/👍|⚠️|❌/)
         end
 
         it 'shows the correct answer' do
@@ -271,15 +296,17 @@ RSpec.describe LearningHandler do
         end
 
         it 'updates the SRS with score 0' do
-          review.update!(repetitions: 3, interval: 10)
-          expect { handler.handle_answer }
-            .to change { review.reload.repetitions }.from(3).to(0)
-            .and change { review.reload.due_date }
+          expect { handler.handle_answer }.to change { review.reload.due_session }
         end
 
         it 'increments reviewed_count' do
           handler.handle_answer
           expect(session[:reviewed_count]).to eq(1)
+        end
+
+        it 're-inserts the word at position 1' do
+          handler.handle_answer
+          expect(session[:queue][1]).to eq(review.id)
         end
       end
 
@@ -342,7 +369,6 @@ RSpec.describe LearningHandler do
 
         it 'does not list perfect words in the worst section' do
           handler.handle_answer
-          # Katze scored 100, should not appear under "Повторить"
           worst_section = sent_messages.last[:text].split('Повторить').last
           expect(worst_section).not_to include('Katze')
         end
@@ -412,7 +438,7 @@ RSpec.describe LearningHandler do
         end
 
         it 'does not update the SRS record' do
-          expect { handler.handle_report_mistake(review.id) }.not_to change { review.reload.due_date }
+          expect { handler.handle_report_mistake(review.id) }.not_to change { review.reload.due_session }
         end
 
         it 'does nothing when the review id does not exist' do
@@ -436,11 +462,12 @@ RSpec.describe LearningHandler do
 
       context 'in learn_native_to_de mode with article' do
         let(:word)        { create(:word, :with_article) }
-        let!(:review)     { create(:word_review, word: word, user: user, due_date: Time.now) }
+        let!(:review)     { create(:word_review, word: word, user: user, due_session: 0) }
         let(:answer_text) { 'der Hund' }
 
         before do
           session[:current_review_id] = review.id
+          session[:queue]             = [review.id, review2.id]
           session[:mode]              = 'learn_native_to_de'
         end
 

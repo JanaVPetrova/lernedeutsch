@@ -19,7 +19,7 @@ class ReminderScheduler
       next unless reminder.due_now?
 
       user      = reminder.user
-      due_count = WordReview.for_user(user).due.count
+      due_count = WordReview.due_count_for_user(user)
       next if due_count.zero?
 
       send_message(token, user.telegram_id,
