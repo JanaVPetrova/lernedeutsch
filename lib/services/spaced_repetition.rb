@@ -1,68 +1,46 @@
-# Implements the SM-2 spaced repetition algorithm.
+# Implements the Leitner Queue spaced repetition algorithm.
 #
-# Quality scale (0–5) is derived from the 0–100 score:
-#   0–19  => 0  (blackout)
-#   20–39 => 1  (incorrect, familiar)
-#   40–59 => 2  (incorrect, easy to recall)
-#   60–74 => 3  (correct with difficulty)
-#   75–89 => 4  (correct with hesitation)
-#   90–100 => 5 (perfect)
+# Words are organised into 5 boxes. A word's box determines how many sessions
+# must pass before it reappears in a new session.
 #
-# Intervals (in hours):
-#   repetitions=0 => 6 hours
-#   repetitions=1 => 24 hours
-#   repetitions>1 => interval * ease_factor
+#   Box 1: every 1 session   (new / forgotten words)
+#   Box 2: every 2 sessions
+#   Box 3: every 4 sessions
+#   Box 4: every 8 sessions
+#   Box 5: every 16 sessions (near-mastered)
+#
+# Within a single session, wrong/partial answers cause the word to be
+# re-inserted into the session queue (handled by LearningHandler). This method
+# only updates the persistent box level and due_session for the next session.
+#
+# Score → box change:
+#   0–49  (wrong / skip) : box = max(1, box-1), due next session
+#   50–74 (partial)      : box unchanged,        due in box_interval sessions
+#   75–99 (almost)       : box = min(5, box+1),  due in new box_interval sessions
+#   100   (perfect)      : box = min(5, box+1),  due in new box_interval sessions
 class SpacedRepetition
-  MIN_EASE_FACTOR = 1.3
+  BOX_INTERVALS = { 1 => 1, 2 => 2, 3 => 4, 4 => 8, 5 => 16 }.freeze
 
-  def self.update(review, score)
-    new(review).update(score)
+  def self.update(review, score, current_session)
+    new(review).update(score, current_session)
   end
 
   def initialize(review)
     @review = review
   end
 
-  def update(score)
-    quality = score_to_quality(score)
-
-    if quality < 3
-      @review.repetitions = 0
-      @review.interval    = 1
-      @review.due_date    = Time.now
+  def update(score, current_session)
+    if score < 50
+      @review.box = [@review.box - 1, 1].max
+    elsif score < 75
+      # box unchanged
     else
-      @review.interval = next_interval
-      @review.repetitions += 1
-      @review.ease_factor = [
-        (@review.ease_factor + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)).round(2),
-        MIN_EASE_FACTOR
-      ].max
-      @review.due_date = Time.now + @review.interval * 3600
+      @review.box = [@review.box + 1, 5].min
     end
 
-    @review.last_score = score
+    @review.due_session = current_session + BOX_INTERVALS[@review.box]
+    @review.last_score  = score
     @review.save!
     @review
-  end
-
-  private
-
-  def score_to_quality(score)
-    case score
-    when 0..19  then 0
-    when 20..39 then 1
-    when 40..59 then 2
-    when 60..74 then 3
-    when 75..89 then 4
-    else             5
-    end
-  end
-
-  def next_interval
-    case @review.repetitions
-    when 0 then 6
-    when 1 then 24
-    else        (@review.interval * @review.ease_factor).round
-    end
   end
 end

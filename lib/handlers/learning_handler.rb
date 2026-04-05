@@ -7,6 +7,14 @@ class LearningHandler
     resize_keyboard: true
   )
 
+  # Re-insertion positions in the session queue for wrong/partial answers.
+  REINSERT_POSITIONS = {
+    (0..0)   => 1,  # skip:    see it after 1 word
+    (1..49)  => 1,  # wrong:   see it after 1 word
+    (50..74) => 2,  # partial: see it after 2 words
+    (75..99) => 3,  # almost:  see it after 3 words
+  }.freeze
+
   def self.report_button(review_id)
     Telegram::Bot::Types::InlineKeyboardMarkup.new(
       inline_keyboard: [[
@@ -26,18 +34,20 @@ class LearningHandler
   end
 
   def start(mode)
+    user = User.find_or_create_from_telegram(@message.from)
+    user.increment!(:sessions_completed)
+
     @session[:mode]            = mode
     @session[:reviewed_count]  = 0
     @session[:session_results] = []
+    @session[:queue]           = WordReview.queue_for_user(user, group: @session[:word_group])
     show_next_word
   end
 
   def show_next_word
-    user   = User.find_or_create_from_telegram(@message.from)
-    group  = @session[:word_group]
-    review = WordReview.next_for_user(user, group: group)
+    queue = @session[:queue] ||= []
 
-    unless review
+    if queue.empty?
       reviewed = @session[:reviewed_count] || 0
       msg = reviewed > 0 ? MSGS[:learn_all_done].call(reviewed) : MSGS[:learn_no_words]
       reply msg, reply_markup: MAIN_KEYBOARD
@@ -45,9 +55,19 @@ class LearningHandler
       return
     end
 
+    review_id = queue.first
+    review    = WordReview.find_by(id: review_id)
+
+    # If the review was deleted or snoozed mid-session, skip it cleanly.
+    unless review && !review.snoozed
+      queue.shift
+      show_next_word
+      return
+    end
+
     @session[:current_review_id] = review.id
     word      = review.word
-    due_count = WordReview.due_count_for_user(user, group: group)
+    due_count = queue.size
 
     prompt = if @session[:mode] == 'learn_de_to_native'
                MSGS[:learn_prompt_de_to_ru].call(word.full_german)
@@ -78,14 +98,16 @@ class LearningHandler
 
     when MSGS[:btn_snooze]
       review.update!(snoozed: true)
+      @session[:queue]&.shift
       reply MSGS[:snoozed_done], parse_mode: 'Markdown'
       show_next_word
 
     when MSGS[:btn_skip]
-      SpacedRepetition.update(review, 0)
+      user = User.find_or_create_from_telegram(@message.from)
+      SpacedRepetition.update(review, 0, user.sessions_completed)
       record_result(word, 0)
-      @session[:reviewed_count]          = (@session[:reviewed_count] || 0) + 1
-      @session[:last_answered_review_id] = review.id
+      @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
+      reinsert_or_advance(0)
       reply "#{MSGS[:feedback_empty]}\n#{MSGS[:learn_correct_answer].call(expected)}",
             parse_mode: 'Markdown',
             reply_markup: LearningHandler.report_button(review.id)
@@ -93,9 +115,11 @@ class LearningHandler
 
     else
       score = AnswerScorer.score(expected: expected, given: @message.text)
-      SpacedRepetition.update(review, score)
+      user  = User.find_or_create_from_telegram(@message.from)
+      SpacedRepetition.update(review, score, user.sessions_completed)
       record_result(word, score)
       @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
+      reinsert_or_advance(score)
 
       text = feedback_for(score)
       text += "\n#{MSGS[:learn_correct_answer].call(expected)}" if score < 100
@@ -121,6 +145,19 @@ class LearningHandler
 
   private
 
+  # Remove the current word from the front of the queue, then re-insert it
+  # at the appropriate position if the score warrants it.
+  def reinsert_or_advance(score)
+    queue = @session[:queue] ||= []
+    queue.shift   # remove current word from front
+
+    position = REINSERT_POSITIONS.find { |range, _| range.cover?(score) }&.last
+    return unless position
+
+    insert_at = [position, queue.size].min
+    queue.insert(insert_at, @session[:current_review_id])
+  end
+
   def record_result(word, score)
     @session[:session_results] ||= []
     @session[:session_results] << { word: word.full_german, translation: word.translation, score: score }
@@ -143,6 +180,7 @@ class LearningHandler
     @session[:reviewed_count]    = nil
     @session[:word_group]        = nil
     @session[:session_results]   = nil
+    @session[:queue]             = nil
   end
 
   def feedback_for(score)

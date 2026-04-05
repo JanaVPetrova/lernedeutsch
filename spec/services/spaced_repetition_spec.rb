@@ -3,97 +3,128 @@ require 'spec_helper'
 RSpec.describe SpacedRepetition do
   let(:user)   { create(:user) }
   let(:word)   { create(:word, :with_article) }
-  let(:review) { create(:word_review, word: word, user: user) }
+  let(:review) { create(:word_review, word: word, user: user, box: 1, due_session: 0) }
 
   describe '.update' do
-    subject(:update) { described_class.update(review, score) }
+    subject(:update) { described_class.update(review, score, current_session) }
+
+    let(:current_session) { 3 }
+
+    # ── Perfect score ──────────────────────────────────────────────────────────
 
     context 'with a perfect score (100)' do
       let(:score) { 100 }
 
-      it 'increments repetitions' do
-        expect { update }.to change { review.repetitions }.by(1)
+      it 'advances the box by 1' do
+        expect { update }.to change { review.box }.from(1).to(2)
       end
 
-      it 'sets due_date in the future' do
+      it 'schedules due_session = current + box_interval(new_box)' do
         update
-        expect(review.due_date).to be > Time.now
+        # new box=2, interval=2 → due_session = 3+2 = 5
+        expect(review.due_session).to eq(5)
       end
 
-      it 'keeps ease_factor at or above minimum' do
+      it 'saves last_score' do
         update
-        expect(review.ease_factor).to be >= SpacedRepetition::MIN_EASE_FACTOR
+        expect(review.last_score).to eq(100)
       end
     end
 
-    context 'with a passing score (75)' do
+    # ── Almost score ───────────────────────────────────────────────────────────
+
+    context 'with an almost score (75)' do
       let(:score) { 75 }
 
-      it 'increments repetitions' do
-        expect { update }.to change { review.repetitions }.by(1)
+      it 'advances the box by 1' do
+        expect { update }.to change { review.box }.from(1).to(2)
+      end
+
+      it 'schedules due_session correctly' do
+        update
+        expect(review.due_session).to eq(5) # current 3 + interval 2
       end
     end
 
-    context 'with a failing score (50)' do
+    # ── Partial score ──────────────────────────────────────────────────────────
+
+    context 'with a partial score (50)' do
       let(:score) { 50 }
 
-      it 'resets repetitions to zero' do
-        review.update!(repetitions: 3)
-        update
-        expect(review.repetitions).to eq(0)
+      it 'keeps the box unchanged' do
+        expect { update }.not_to change { review.box }
       end
 
-      it 'sets interval to 1' do
-        review.update!(interval: 10)
+      it 'schedules due_session = current + box_interval(box)' do
         update
-        expect(review.interval).to eq(1)
-      end
-
-      it 'schedules due_date at or before now so the word reappears immediately' do
-        update
-        expect(review.due_date).to be <= Time.now
+        expect(review.due_session).to eq(4) # current 3 + interval 1
       end
     end
 
-    context 'with a zero score' do
+    # ── Wrong score ────────────────────────────────────────────────────────────
+
+    context 'with a wrong score (30)' do
+      let(:score) { 30 }
+
+      it 'drops the box by 1 (min 1)' do
+        review.update!(box: 3)
+        update
+        expect(review.box).to eq(2)
+      end
+
+      it 'does not drop box below 1' do
+        review.update!(box: 1)
+        update
+        expect(review.box).to eq(1)
+      end
+
+      it 'schedules due next session' do
+        update
+        expect(review.due_session).to eq(4) # current 3 + interval 1 (box stays 1)
+      end
+    end
+
+    # ── Zero / skip ────────────────────────────────────────────────────────────
+
+    context 'with score 0 (skip)' do
       let(:score) { 0 }
 
-      it 'resets repetitions' do
-        review.update!(repetitions: 5)
+      it 'drops the box (min 1)' do
+        review.update!(box: 2)
         update
-        expect(review.repetitions).to eq(0)
+        expect(review.box).to eq(1)
       end
     end
 
-    context 'interval progression (in hours)' do
-      it 'uses interval=6 (hours) after first success' do
-        described_class.update(review, 100)
-        expect(review.interval).to eq(6)
+    # ── Box ceiling ────────────────────────────────────────────────────────────
+
+    context 'when already at box 5' do
+      let(:score) { 100 }
+
+      it 'does not exceed box 5' do
+        review.update!(box: 5)
+        update
+        expect(review.box).to eq(5)
       end
 
-      it 'uses interval=24 (hours) after second success' do
-        review.update!(repetitions: 1, interval: 6)
-        described_class.update(review, 100)
-        expect(review.interval).to eq(24)
-      end
-
-      it 'multiplies by ease_factor after third+ success' do
-        review.update!(repetitions: 2, interval: 24, ease_factor: 2.5)
-        described_class.update(review, 100)
-        expect(review.interval).to eq(60)  # (24 * 2.5).round
-      end
-
-      it 'schedules due_date ~6 hours ahead after first success' do
-        described_class.update(review, 100)
-        expect(review.due_date).to be_within(60).of(Time.now + 6 * 3600)
+      it 'schedules due_session = current + 16' do
+        review.update!(box: 5)
+        update
+        expect(review.due_session).to eq(current_session + 16)
       end
     end
 
-    context 'ease_factor floor' do
-      it 'never drops below MIN_EASE_FACTOR' do
-        review.update!(ease_factor: 1.3)
-        described_class.update(review, 60)
-        expect(review.ease_factor).to be >= SpacedRepetition::MIN_EASE_FACTOR
+    # ── Box intervals ──────────────────────────────────────────────────────────
+
+    context 'box interval progression' do
+      let(:score) { 100 }
+
+      { 1 => 2, 2 => 4, 3 => 8, 4 => 16 }.each do |starting_box, expected_interval|
+        it "box #{starting_box} → interval #{expected_interval} after perfect answer" do
+          review.update!(box: starting_box)
+          update
+          expect(review.due_session).to eq(current_session + expected_interval)
+        end
       end
     end
   end

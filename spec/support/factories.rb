@@ -32,10 +32,8 @@ FactoryBot.define do
   factory :word_review do
     association :word
     association :user
-    repetitions { 0 }
-    ease_factor { 2.5 }
-    interval    { 1 }
-    due_date    { Time.now }
+    box         { 1 }
+    due_session { 0 }
     snoozed     { false }
     last_score  { nil }
   end
