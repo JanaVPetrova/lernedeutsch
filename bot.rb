@@ -4,6 +4,8 @@ require 'logger'
 require 'telegram/bot'
 require_relative 'lib/boot'
 
+VERSION = '1.0.0'
+
 TOKEN = ENV.fetch('TELEGRAM_BOT_TOKEN') { raise 'TELEGRAM_BOT_TOKEN is not set' }
 
 MAIN_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
@@ -25,7 +27,7 @@ def show_main_menu(bot, message)
   user = User.find_or_create_from_telegram(message.from)
   bot.api.send_message(
     chat_id: message.chat.id,
-    text: MSGS[:welcome_back].call(user.display_name),
+    text: MSGS[:welcome_back].call(user.display_name, VERSION),
     reply_markup: MAIN_KEYBOARD
   )
 end
@@ -110,7 +112,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         user = User.find_or_create_from_telegram(message.from)
         bot.api.send_message(
           chat_id: chat_id,
-          text: MSGS[:welcome].call(user.display_name),
+          text: MSGS[:welcome].call(user.display_name, VERSION),
           reply_markup: MAIN_KEYBOARD
         )
       when 'stop'

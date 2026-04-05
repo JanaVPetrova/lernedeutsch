@@ -85,7 +85,7 @@ class LearningHandler
     unless review
       @session[:mode] = nil
       user = User.find_or_create_from_telegram(@message.from)
-      reply MSGS[:welcome_back].call(user.display_name), reply_markup: MAIN_KEYBOARD
+      reply MSGS[:welcome_back].call(user.display_name, VERSION), reply_markup: MAIN_KEYBOARD
       return
     end
 
