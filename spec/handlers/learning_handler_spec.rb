@@ -312,26 +312,39 @@ RSpec.describe LearningHandler do
 
         before do
           session[:session_results] = [
-            { word: 'Katze', score: 100 },
-            { word: 'Hund',  score: 0   },
-            { word: 'gehen', score: 75  }
+            { word: 'Katze', translation: 'кошка',  score: 100 },
+            { word: 'Hund',  translation: 'собака', score: 0   },
+            { word: 'gehen', translation: 'идти',   score: 75  }
           ]
         end
 
-        it 'sends the stats message' do
+        it 'sends the stats message with category counts' do
           handler.handle_answer
           text = sent_messages.last[:text]
-          expect(text).to include('Katze')
-          expect(text).to include('Hund')
-          expect(text).to include('gehen')
+          expect(text).to include('📊')
+          expect(text).to include('🎉 Идеально: 1')
+          expect(text).to include('👍 Почти: 1')
+          expect(text).to include('⏭ Пропущено: 1')
         end
 
-        it 'shows the correct icon for each score' do
+        it 'shows total word count in header' do
+          handler.handle_answer
+          expect(sent_messages.last[:text]).to include('3 слова')
+        end
+
+        it 'lists the worst-performing words with both translations' do
           handler.handle_answer
           text = sent_messages.last[:text]
-          expect(text).to include('🎉')
-          expect(text).to include('⏭')
-          expect(text).to include('👍')
+          expect(text).to include('Повторить ещё раз')
+          expect(text).to include('Hund — собака')
+          expect(text).to include('gehen — идти')
+        end
+
+        it 'does not list perfect words in the worst section' do
+          handler.handle_answer
+          # Katze scored 100, should not appear under "Повторить"
+          worst_section = sent_messages.last[:text].split('Повторить').last
+          expect(worst_section).not_to include('Katze')
         end
 
         it 'returns to the main keyboard' do
@@ -348,7 +361,7 @@ RSpec.describe LearningHandler do
         it 'records the word and score on a normal answer' do
           allow(message).to receive(:text).and_return('кошка')
           handler.handle_answer
-          expect(session[:session_results].first).to include(word: 'Katze', score: 100)
+          expect(session[:session_results].first).to include(word: 'Katze', translation: 'кошка', score: 100)
         end
 
         it 'records score 0 on skip' do

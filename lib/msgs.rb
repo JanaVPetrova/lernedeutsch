@@ -60,17 +60,35 @@ MSGS = {
   learn_no_words:        'Слов для повторения пока нет. Возвращайся позже! ⏰',
   learn_correct_answer:  ->(answer) { "Правильный ответ: *#{answer}*" },
   learn_session_stats:   ->(rows) {
-    header = "📊 *Итоги сессии*\n\n"
-    header + rows.map { |r|
-      icon = case r[:score]
-             when 100    then '🎉'
-             when 75..99 then '👍'
-             when 50..74 then '⚠️'
-             when 1..49  then '❌'
-             else             '⏭'
-             end
-      "#{icon} #{r[:word]} — #{r[:score]}%"
-    }.join("\n")
+    perfect  = rows.count { |r| r[:score] == 100 }
+    almost   = rows.count { |r| (75..99).cover?(r[:score]) }
+    partial  = rows.count { |r| (50..74).cover?(r[:score]) }
+    wrong    = rows.count { |r| (1..49).cover?(r[:score]) }
+    skipped  = rows.count { |r| r[:score] == 0 }
+    total    = rows.size
+
+    lines = ["📊 *Итоги сессии* — #{total} #{pluralize_ru(total, 'слово', 'слова', 'слов')}\n"]
+    lines << "🎉 Идеально: #{perfect}"   if perfect > 0
+    lines << "👍 Почти: #{almost}"       if almost  > 0
+    lines << "⚠️ Частично: #{partial}"  if partial > 0
+    lines << "❌ Неверно: #{wrong}"      if wrong   > 0
+    lines << "⏭ Пропущено: #{skipped}"  if skipped > 0
+
+    worst = rows.reject { |r| r[:score] == 100 }.sort_by { |r| r[:score] }.first(5)
+    unless worst.empty?
+      lines << "\n🔁 *Повторить ещё раз:*"
+      worst.each do |r|
+        icon = case r[:score]
+               when 75..99 then '👍'
+               when 50..74 then '⚠️'
+               when 1..49  then '❌'
+               else             '⏭'
+               end
+        lines << "#{icon} #{r[:word]} — #{r[:translation]}"
+      end
+    end
+
+    lines.join("\n")
   },
   learn_session_none:    'Ты не успел ответить ни на одно слово.',
 

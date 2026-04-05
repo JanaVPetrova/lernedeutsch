@@ -123,7 +123,7 @@ class LearningHandler
 
   def record_result(word, score)
     @session[:session_results] ||= []
-    @session[:session_results] << { word: word.full_german, score: score }
+    @session[:session_results] << { word: word.full_german, translation: word.translation, score: score }
   end
 
   def show_stats_and_return
