@@ -138,25 +138,16 @@ class LearningHandler
     target_review = WordReview.find_by(id: review_id)
     return unless target_review
 
-    word = target_review.word
-    side = @session[:mode] == 'learn_de_to_native' ? 'translation' : 'de'
-
-    prompt = if side == 'translation'
-               current = word.alternatives_translation.join(', ')
-               MSGS[:edit_ask_synonym_translation].call(word.full_german, current)
-             else
-               current = word.alternatives_de.join(', ')
-               MSGS[:edit_ask_synonym_de].call(word.display_translation, current)
-             end
-
     @session[:scene]           = :edit_word
+    @session[:scene_step]      = :fix_de
     @session[:edit_review_id]  = review_id
-    @session[:edit_side]       = side
     @session[:edit_saved_mode] = @session[:mode]
     @session[:mode]            = nil
-    reply prompt,
+
+    word = target_review.word
+    reply MSGS[:edit_fix_de].call(word.alternatives_de.join(', ')),
           parse_mode: 'Markdown',
-          reply_markup: Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
+          reply_markup: yes_no_keyboard
   end
 
   private
@@ -207,6 +198,14 @@ class LearningHandler
     when 1..49  then MSGS[:feedback_wrong].call(score)
     else             MSGS[:feedback_empty]
     end
+  end
+
+  def yes_no_keyboard
+    Telegram::Bot::Types::ReplyKeyboardMarkup.new(
+      keyboard: [[MSGS[:btn_yes], MSGS[:btn_no]]],
+      resize_keyboard: true,
+      one_time_keyboard: true
+    )
   end
 
   def reply(text, **opts)

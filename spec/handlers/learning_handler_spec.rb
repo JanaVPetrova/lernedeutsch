@@ -413,20 +413,14 @@ RSpec.describe LearningHandler do
           expect(session[:scene]).to eq(:edit_word)
         end
 
+        it 'sets scene_step to :fix_de' do
+          handler.handle_report_mistake(review.id)
+          expect(session[:scene_step]).to eq(:fix_de)
+        end
+
         it 'stores the given review id in session' do
           handler.handle_report_mistake(review.id)
           expect(session[:edit_review_id]).to eq(review.id)
-        end
-
-        it 'sets edit_side to "translation" in learn_de_to_native mode' do
-          handler.handle_report_mistake(review.id)
-          expect(session[:edit_side]).to eq('translation')
-        end
-
-        it 'sets edit_side to "de" in learn_native_to_de mode' do
-          session[:mode] = 'learn_native_to_de'
-          handler.handle_report_mistake(review.id)
-          expect(session[:edit_side]).to eq('de')
         end
 
         it 'can target any arbitrary past review by id' do
@@ -434,15 +428,14 @@ RSpec.describe LearningHandler do
           expect(session[:edit_review_id]).to eq(review2.id)
         end
 
-        it 'sends a prompt mentioning the German word and the current accepted answers' do
+        it 'sends a prompt showing the current German form' do
           handler.handle_report_mistake(review.id)
           expect(sent_messages.last[:text]).to include('Katze')
-          expect(sent_messages.last[:text]).to include('кошка')
         end
 
-        it 'removes the learning keyboard during editing' do
+        it 'sends a yes/no keyboard' do
           handler.handle_report_mistake(review.id)
-          expect(sent_messages.last[:reply_markup]).to be_a(Telegram::Bot::Types::ReplyKeyboardRemove)
+          expect(sent_messages.last[:reply_markup]).to be_a(Telegram::Bot::Types::ReplyKeyboardMarkup)
         end
 
         it 'does not update the SRS record' do

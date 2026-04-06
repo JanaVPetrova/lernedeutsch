@@ -4,7 +4,7 @@ require 'logger'
 require 'telegram/bot'
 require_relative 'lib/boot'
 
-VERSION = '1.1.0'
+VERSION = '1.1.1'
 
 TOKEN = ENV.fetch('TELEGRAM_BOT_TOKEN') { raise 'TELEGRAM_BOT_TOKEN is not set' }
 
@@ -299,6 +299,15 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
     end
 
     # ── Scene: edit_word ─────────────────────────────────────────────────────
+    #
+    # Steps:
+    #   :fix_de       — show current DE forms; user types correction or "Да" to keep
+    #   :add_more_de  — yes/no: add another DE synonym?
+    #   :new_de       — collect the extra DE word
+    #   :fix_ru       — same for RU
+    #   :add_more_ru  — yes/no: add another RU synonym?
+    #   :new_ru       — collect the extra RU word
+    #   (done)        — show summary and resume session
 
     if session[:scene] == :edit_word
       review = WordReview.find_by(id: session[:edit_review_id])
@@ -307,42 +316,118 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         session[:mode]  = session.delete(:edit_saved_mode)
         next
       end
-      word = review.word
-      side = session[:edit_side]
 
-      msg = if side == 'translation'
-              new_ru = text.strip
-              rn = Word.normalize(new_ru)
-              synonym = Word.find_by(de_normalized: word.de_normalized, ru_normalized: rn) ||
-                        Word.new(de: word.de, ru: new_ru)
-              if synonym.persisted?
-                MSGS[:edit_synonym_exists]
-              else
-                synonym.article_de = word.article_de
-                synonym.word_group = word.word_group
-                synonym.save ? MSGS[:edit_synonym_done] : MSGS[:edit_synonym_invalid]
-              end
-            else
-              article_de, de = WordImporter.split_article(text.strip)
-              dn = Word.normalize(de)
-              synonym = Word.find_by(de_normalized: dn, ru_normalized: word.ru_normalized) ||
-                        Word.new(de: de, ru: word.ru)
-              if synonym.persisted?
-                MSGS[:edit_synonym_exists]
-              else
-                synonym.article_de = article_de
-                synonym.word_group = word.word_group
-                synonym.save ? MSGS[:edit_synonym_done] : MSGS[:edit_synonym_invalid]
-              end
-            end
+      handler   = LearningHandler.new(bot, message, session)
+      word      = review.word
+      yes_no_kb = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
+        keyboard: [[MSGS[:btn_yes], MSGS[:btn_no]]],
+        resize_keyboard: true, one_time_keyboard: true
+      )
+      no_kb = Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
 
-      bot.api.send_message(chat_id: chat_id, text: msg)
+      # Helper: try to save a new DE synonym; silently skip if it already exists.
+      save_de_synonym = lambda do |de_text|
+        article_de, de = WordImporter.split_article(de_text.strip)
+        dn = Word.normalize(de)
+        existing = Word.find_by(de_normalized: dn, ru_normalized: word.ru_normalized)
+        unless existing
+          syn = Word.new(de: de, ru: word.ru, article_de: article_de, word_group: word.word_group)
+          syn.save
+        end
+      end
 
-      session[:scene]          = nil
-      session[:edit_review_id] = nil
-      session[:edit_side]      = nil
-      session[:mode]           = session.delete(:edit_saved_mode)
-      LearningHandler.new(bot, message, session).show_next_word
+      # Helper: try to save a new RU synonym; silently skip if it already exists.
+      save_ru_synonym = lambda do |ru_text|
+        rn = Word.normalize(ru_text.strip)
+        existing = Word.find_by(de_normalized: word.de_normalized, ru_normalized: rn)
+        unless existing
+          syn = Word.new(de: word.de, ru: ru_text.strip, article_de: word.article_de, word_group: word.word_group)
+          syn.save
+        end
+      end
+
+      # Helper: finish the flow — show summary and resume learning.
+      finish_edit = lambda do
+        word.reload
+        de_list = word.alternatives_de
+        ru_list = word.alternatives_translation
+        bot.api.send_message(
+          chat_id: chat_id,
+          text: MSGS[:edit_done].call(de_list, ru_list),
+          parse_mode: 'Markdown'
+        )
+        session[:scene]          = nil
+        session[:scene_step]     = nil
+        session[:edit_review_id] = nil
+        session[:mode]           = session.delete(:edit_saved_mode)
+        handler.show_next_word
+      end
+
+      case session[:scene_step]
+
+      when :fix_de
+        if text.strip == MSGS[:btn_yes]
+          # User confirmed current DE is correct — move on to "add more?" prompt.
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_ask_more_de],
+                               parse_mode: 'Markdown', reply_markup: yes_no_kb)
+          session[:scene_step] = :add_more_de
+        else
+          # User typed a correction — add it as a synonym (the old spelling stays as an alternative).
+          save_de_synonym.call(text)
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_ask_more_de],
+                               parse_mode: 'Markdown', reply_markup: yes_no_kb)
+          session[:scene_step] = :add_more_de
+        end
+
+      when :add_more_de
+        if text.strip == MSGS[:btn_yes]
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_new_de],
+                               parse_mode: 'Markdown', reply_markup: no_kb)
+          session[:scene_step] = :new_de
+        else
+          # Move to RU side.
+          bot.api.send_message(
+            chat_id: chat_id,
+            text: MSGS[:edit_fix_ru].call(word.alternatives_translation.join(', ')),
+            parse_mode: 'Markdown', reply_markup: yes_no_kb
+          )
+          session[:scene_step] = :fix_ru
+        end
+
+      when :new_de
+        save_de_synonym.call(text)
+        bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_ask_more_de],
+                             parse_mode: 'Markdown', reply_markup: yes_no_kb)
+        session[:scene_step] = :add_more_de
+
+      when :fix_ru
+        if text.strip == MSGS[:btn_yes]
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_ask_more_ru],
+                               parse_mode: 'Markdown', reply_markup: yes_no_kb)
+          session[:scene_step] = :add_more_ru
+        else
+          save_ru_synonym.call(text)
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_ask_more_ru],
+                               parse_mode: 'Markdown', reply_markup: yes_no_kb)
+          session[:scene_step] = :add_more_ru
+        end
+
+      when :add_more_ru
+        if text.strip == MSGS[:btn_yes]
+          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_new_ru],
+                               parse_mode: 'Markdown', reply_markup: no_kb)
+          session[:scene_step] = :new_ru
+        else
+          finish_edit.call
+        end
+
+      when :new_ru
+        save_ru_synonym.call(text)
+        bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_ask_more_ru],
+                             parse_mode: 'Markdown', reply_markup: yes_no_kb)
+        session[:scene_step] = :add_more_ru
+
+      end
       next
     end
 
