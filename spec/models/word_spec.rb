@@ -76,7 +76,7 @@ RSpec.describe Word do
 
     it 'appends de_context in italics when present' do
       word = build(:word, de: 'stören', article_de: nil, de_context: '(jmdn.)')
-      expect(word.prompt_de).to eq('stören __(jmdn.)__')
+      expect(word.prompt_de).to eq('stören (jmdn.)')
     end
   end
 
@@ -88,7 +88,7 @@ RSpec.describe Word do
 
     it 'appends ru_context in italics when present' do
       word = build(:word, ru: 'мешать', ru_context: '(кому-то что-то делать)')
-      expect(word.prompt_ru).to eq('мешать __(кому-то что-то делать)__')
+      expect(word.prompt_ru).to eq('мешать (кому-то что-то делать)')
     end
   end
 

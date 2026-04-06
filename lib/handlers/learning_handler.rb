@@ -203,10 +203,12 @@ class LearningHandler
 
     distractors = if @session[:mode] == 'learn_de_to_native'
                     Word.where.not(ru_normalized: word.ru_normalized)
+                        .where(word_group_id: word.word_group_id)
                         .limit(3)
                         .pluck(:ru)
                   else
                     Word.where.not(de_normalized: word.de_normalized)
+                        .where(word_group_id: word.word_group_id)
                         .limit(3)
                         .map { |w| w.full_german }
                   end

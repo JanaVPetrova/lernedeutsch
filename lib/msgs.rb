@@ -116,7 +116,7 @@ MSGS = {
   btn_report_mistake: 'Ошибка в задании',
   btn_back:           '← Назад',
 
-  learn_hint:         ->(options) { "💡 Выбери один из вариантов:\n\n#{options.map.with_index(1) { |o, i| "#{i}. #{o}" }.join("\n")}" },
+  learn_hint:         ->(options) { "💡 Подсказка:\n\n#{options.map.with_index(1) { |o, i| "#{i}. #{o}" }.join("\n")}" },
 
   hint_penalty:       ->(score) { "💡 _Подсказка использована — итоговый счёт: #{score}%._" },
 

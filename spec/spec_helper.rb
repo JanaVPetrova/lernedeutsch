@@ -6,6 +6,7 @@ ENV['RACK_ENV'] = 'test'
 require 'active_record'
 require 'telegram/bot'
 require 'factory_bot'
+require 'pry-byebug'
 require 'database_cleaner/active_record'
 
 # Database setup

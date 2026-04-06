@@ -37,7 +37,6 @@ class SpacedRepetition
     else
       @review.box = [@review.box + 1, 5].min
     end
-
     @review.due_session = current_session + BOX_INTERVALS[@review.box]
     @review.last_score  = score
     @review.save!

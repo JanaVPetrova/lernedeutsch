@@ -13,5 +13,6 @@ gem 'kamal'
 group :development, :test do
   gem 'rspec', '~> 3.13'
   gem 'factory_bot', '~> 6.5'
+  gem 'pry-byebug'
   gem 'database_cleaner-active_record', '~> 2.2'
 end
