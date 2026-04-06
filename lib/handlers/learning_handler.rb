@@ -135,7 +135,7 @@ class LearningHandler
       reinsert_or_advance(score)
 
       text = feedback_for(raw_score)
-      text += "\n#{MSGS[:hint_penalty]}" if hint_used
+      text += "\n#{MSGS[:hint_penalty].call(score)}" if hint_used
       text += "\n#{MSGS[:learn_correct_answer].call(expected_display)}" if raw_score < 100
       reply text, parse_mode: 'Markdown', reply_markup: LearningHandler.report_button(review.id)
       show_next_word
@@ -203,13 +203,15 @@ class LearningHandler
 
     distractors = if @session[:mode] == 'learn_de_to_native'
                     Word.where.not(ru_normalized: word.ru_normalized)
+                        .limit(3)
                         .pluck(:ru)
                   else
                     Word.where.not(de_normalized: word.de_normalized)
+                        .limit(3)
                         .map { |w| w.full_german }
                   end
 
-    (distractors.sample(3) + [correct]).shuffle
+    (distractors + [correct]).shuffle
   end
 
   def feedback_for(score)

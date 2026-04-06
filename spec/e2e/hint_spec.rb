@@ -29,7 +29,7 @@ RSpec.describe 'Hint during learning', type: :e2e do
     receive(tg_user, text: MSGS[:btn_hint])
     msgs = receive(tg_user, text: 'dog')
     expect(msgs.first[:text]).to include('🎉')
-    expect(msgs.first[:text]).to include(MSGS[:hint_penalty])
+    expect(msgs.first[:text]).to include(MSGS[:hint_penalty].call(50))
   end
 
   it 'halves the recorded score when a hint was used' do
