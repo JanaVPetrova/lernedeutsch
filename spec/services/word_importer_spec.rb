@@ -32,13 +32,28 @@ RSpec.describe WordImporter do
   # ── .parse ───────────────────────────────────────────────────────────────────
 
   describe '.parse' do
-    it 'parses simple TSV lines' do
+    it 'parses simple 2-column TSV lines' do
       content = "gehen\tto go\nschlafen\tto sleep"
       result  = described_class.parse(content)
       expect(result).to eq([
-        { de: 'gehen',    article_de: nil, ru: 'to go'    },
-        { de: 'schlafen', article_de: nil, ru: 'to sleep' }
+        { de: 'gehen',    article_de: nil, ru: 'to go',    de_context: nil, ru_context: nil },
+        { de: 'schlafen', article_de: nil, ru: 'to sleep', de_context: nil, ru_context: nil }
       ])
+    end
+
+    it 'parses 4-column TSV with context' do
+      content = "stören\tмешать\t(jmdn.)\t(кому-то что-то делать)"
+      result  = described_class.parse(content)
+      expect(result.first).to include(
+        de: 'stören', ru: 'мешать',
+        de_context: '(jmdn.)', ru_context: '(кому-то что-то делать)'
+      )
+    end
+
+    it 'treats empty context columns as nil' do
+      content = "gehen\tto go\t\t"
+      result  = described_class.parse(content)
+      expect(result.first).to include(de_context: nil, ru_context: nil)
     end
 
     it 'extracts article_de when present' do
@@ -85,8 +100,8 @@ RSpec.describe WordImporter do
         content = "der Hund\tdog|hound"
         result  = described_class.parse(content)
         expect(result).to contain_exactly(
-          { de: 'Hund', article_de: 'der', ru: 'dog'   },
-          { de: 'Hund', article_de: 'der', ru: 'hound' }
+          { de: 'Hund', article_de: 'der', ru: 'dog',   de_context: nil, ru_context: nil },
+          { de: 'Hund', article_de: 'der', ru: 'hound', de_context: nil, ru_context: nil }
         )
       end
 
@@ -94,8 +109,8 @@ RSpec.describe WordImporter do
         content = "Freund|Bekannter\tfriend"
         result  = described_class.parse(content)
         expect(result).to contain_exactly(
-          { de: 'Freund',    article_de: nil, ru: 'friend' },
-          { de: 'Bekannter', article_de: nil, ru: 'friend' }
+          { de: 'Freund',    article_de: nil, ru: 'friend', de_context: nil, ru_context: nil },
+          { de: 'Bekannter', article_de: nil, ru: 'friend', de_context: nil, ru_context: nil }
         )
       end
 
@@ -109,8 +124,8 @@ RSpec.describe WordImporter do
         content = "der Freund|die Freundin\tfriend"
         result  = described_class.parse(content)
         expect(result).to contain_exactly(
-          { de: 'Freund',   article_de: 'der', ru: 'friend' },
-          { de: 'Freundin', article_de: 'die', ru: 'friend' }
+          { de: 'Freund',   article_de: 'der', ru: 'friend', de_context: nil, ru_context: nil },
+          { de: 'Freundin', article_de: 'die', ru: 'friend', de_context: nil, ru_context: nil }
         )
       end
     end
@@ -121,9 +136,9 @@ RSpec.describe WordImporter do
   describe '.import' do
     let(:words_data) do
       [
-        { de: 'Hund',     article_de: 'der', ru: 'dog'   },
-        { de: 'Katze',    article_de: 'die', ru: 'cat'   },
-        { de: 'schlafen', article_de: nil,   ru: 'sleep' }
+        { de: 'Hund',     article_de: 'der', ru: 'dog',   de_context: nil, ru_context: nil },
+        { de: 'Katze',    article_de: 'die', ru: 'cat',   de_context: nil, ru_context: nil },
+        { de: 'schlafen', article_de: nil,   ru: 'sleep', de_context: nil, ru_context: nil }
       ]
     end
 
@@ -168,6 +183,15 @@ RSpec.describe WordImporter do
     it 'leaves word_group nil when not provided' do
       described_class.import(words_data)
       expect(Word.all.map(&:word_group).uniq).to eq([nil])
+    end
+
+    it 'persists de_context and ru_context when provided' do
+      data = [{ de: 'stören', article_de: nil, ru: 'мешать',
+                de_context: '(jmdn.)', ru_context: '(кому-то что-то делать)' }]
+      described_class.import(data)
+      word = Word.find_by(de: 'stören')
+      expect(word.de_context).to eq('(jmdn.)')
+      expect(word.ru_context).to eq('(кому-то что-то делать)')
     end
   end
 end

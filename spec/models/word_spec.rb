@@ -54,6 +54,42 @@ RSpec.describe Word do
       word = build(:word, de: 'Hund', article_de: 'der')
       expect(word.full_german).to eq('der Hund')
     end
+
+    it 'does not include de_context' do
+      word = build(:word, de: 'stören', article_de: nil, de_context: '(jmdn.)')
+      expect(word.full_german).to eq('stören')
+    end
+  end
+
+  describe '#display_translation' do
+    it 'does not include ru_context' do
+      word = build(:word, ru: 'мешать', ru_context: '(кому-то)')
+      expect(word.display_translation).to eq('мешать')
+    end
+  end
+
+  describe '#prompt_de' do
+    it 'returns full_german when de_context is absent' do
+      word = build(:word, de: 'Hund', article_de: 'der', de_context: nil)
+      expect(word.prompt_de).to eq('der Hund')
+    end
+
+    it 'appends de_context in italics when present' do
+      word = build(:word, de: 'stören', article_de: nil, de_context: '(jmdn.)')
+      expect(word.prompt_de).to eq('stören _(jmdn.)_')
+    end
+  end
+
+  describe '#prompt_ru' do
+    it 'returns ru when ru_context is absent' do
+      word = build(:word, ru: 'мешать', ru_context: nil)
+      expect(word.prompt_ru).to eq('мешать')
+    end
+
+    it 'appends ru_context in italics when present' do
+      word = build(:word, ru: 'мешать', ru_context: '(кому-то что-то делать)')
+      expect(word.prompt_ru).to eq('мешать _(кому-то что-то делать)_')
+    end
   end
 
   describe '#alternatives_translation' do

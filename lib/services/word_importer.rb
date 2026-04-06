@@ -29,13 +29,17 @@ class WordImporter
       next if de_raw.nil? || de_raw.empty? || de_raw.start_with?('#')
       next if ru_raw.nil? || ru_raw.empty?
 
+      de_context = row[2]&.strip.presence
+      ru_context = row[3]&.strip.presence
+
       de_forms = de_raw.split('|').map(&:strip)
       ru_forms = ru_raw.split('|').map(&:strip)
 
       de_forms.each do |g|
         article_de, de = split_article(g)
         ru_forms.each do |r|
-          words << { de: de, article_de: article_de, ru: r }
+          words << { de: de, article_de: article_de, ru: r,
+                     de_context: de_context, ru_context: ru_context }
         end
       end
     end
@@ -53,8 +57,10 @@ class WordImporter
              Word.new(de: attrs[:de], ru: attrs[:ru])
       next unless word.new_record?
 
-      word.article_de = attrs[:article_de]
-      word.word_group = word_group
+      word.article_de  = attrs[:article_de]
+      word.de_context  = attrs[:de_context]
+      word.ru_context  = attrs[:ru_context]
+      word.word_group  = word_group
       word.save!
       count += 1
     end

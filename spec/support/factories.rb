@@ -16,6 +16,8 @@ FactoryBot.define do
     sequence(:de) { |n| "Wort#{n}" }
     ru          { 'word' }
     article_de  { nil }
+    ru_context  { nil }
+    de_context  { nil }
     word_group  { nil }
 
     trait :with_article do

@@ -70,9 +70,9 @@ class LearningHandler
     due_count = queue.size
 
     prompt = if @session[:mode] == 'learn_de_to_native'
-               MSGS[:learn_prompt_de_to_ru].call(word.full_german)
+               MSGS[:learn_prompt_de_to_ru].call(word.prompt_de)
              else
-               MSGS[:learn_prompt_ru_to_de].call(word.display_translation)
+               MSGS[:learn_prompt_ru_to_de].call(word.prompt_ru)
              end
 
     reply "#{MSGS[:learn_progress].call(due_count)}\n\n#{prompt}",

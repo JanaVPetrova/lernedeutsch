@@ -15,12 +15,24 @@ class Word < ActiveRecord::Base
     str.to_s.downcase.gsub(/[\s[:punct:]]/, '')
   end
 
+  # Plain answer form — used for scoring, labels, snoozed list matching.
   def full_german
     article_de ? "#{article_de} #{de}" : de
   end
 
+  # Plain answer form — used for scoring and "correct answer" display.
   def display_translation
     ru
+  end
+
+  # Prompt form for DE→RU mode: includes DE context hint in italics when present.
+  def prompt_de
+    de_context.present? ? "#{full_german} _#{de_context}_" : full_german
+  end
+
+  # Prompt form for RU→DE mode: includes RU context hint in italics when present.
+  def prompt_ru
+    ru_context.present? ? "#{ru} _#{ru_context}_" : ru
   end
 
   # All accepted German forms: every Word sharing the same ru_normalized.
