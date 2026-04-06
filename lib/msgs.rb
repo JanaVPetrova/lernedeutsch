@@ -118,6 +118,8 @@ MSGS = {
 
   learn_hint:         ->(options) { "💡 Выбери один из вариантов:\n\n#{options.map.with_index(1) { |o, i| "#{i}. #{o}" }.join("\n")}" },
 
+  hint_penalty:       '💡 _Подсказка использована — очки за ответ уменьшены вдвое._',
+
   # ── Answer feedback ────────────────────────────────────────────────────────
   feedback_perfect:  '🎉 Идеально!',
   feedback_almost:   ->(pct) { "👍 Почти! (#{pct}%)" },

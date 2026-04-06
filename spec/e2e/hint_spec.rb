@@ -25,16 +25,14 @@ RSpec.describe 'Hint during learning', type: :e2e do
     expect(text).to include('dog')
   end
 
-  it 'does not advance the queue — the word is still active after the hint' do
+  it 'shows 🎉 for a correct answer but appends the hint penalty note' do
     receive(tg_user, text: MSGS[:btn_hint])
     msgs = receive(tg_user, text: 'dog')
-    # score is halved by hint, so expect partial feedback (not 🎉)
-    expect(msgs.first[:text]).to match(/⚠️|👍|❌/)
-    # but the word was reviewed — a score was recorded
-    expect(word.word_reviews.reload.first.last_score).not_to be_nil
+    expect(msgs.first[:text]).to include('🎉')
+    expect(msgs.first[:text]).to include(MSGS[:hint_penalty])
   end
 
-  it 'halves the score when a hint was used' do
+  it 'halves the recorded score when a hint was used' do
     receive(tg_user, text: MSGS[:btn_hint])
     receive(tg_user, text: 'dog')
     expect(word.word_reviews.reload.first.last_score).to eq(50)

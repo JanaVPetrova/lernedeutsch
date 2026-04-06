@@ -4,7 +4,7 @@ require 'logger'
 require 'telegram/bot'
 require_relative 'lib/boot'
 
-VERSION = '1.3.0'
+VERSION = '1.3.1'
 
 TOKEN = ENV.fetch('TELEGRAM_BOT_TOKEN') { raise 'TELEGRAM_BOT_TOKEN is not set' }
 

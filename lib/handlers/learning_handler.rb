@@ -125,18 +125,18 @@ class LearningHandler
       show_next_word
 
     else
-      score = AnswerScorer.score(expected: expected_alts, given: @message.text)
-      if @session.delete(:hint_used)
-        score = (score * 0.5).round
-      end
-      user  = User.find_or_create_from_telegram(@message.from)
+      raw_score  = AnswerScorer.score(expected: expected_alts, given: @message.text)
+      hint_used  = @session.delete(:hint_used)
+      score      = hint_used ? (raw_score * 0.5).round : raw_score
+      user       = User.find_or_create_from_telegram(@message.from)
       SpacedRepetition.update(review, score, user.sessions_completed)
       record_result(word, score)
       @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
       reinsert_or_advance(score)
 
-      text = feedback_for(score)
-      text += "\n#{MSGS[:learn_correct_answer].call(expected_display)}" if score < 100
+      text = feedback_for(raw_score)
+      text += "\n#{MSGS[:hint_penalty]}" if hint_used
+      text += "\n#{MSGS[:learn_correct_answer].call(expected_display)}" if raw_score < 100
       reply text, parse_mode: 'Markdown', reply_markup: LearningHandler.report_button(review.id)
       show_next_word
     end
