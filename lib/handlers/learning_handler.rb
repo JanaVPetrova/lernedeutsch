@@ -72,7 +72,7 @@ class LearningHandler
     prompt = if @session[:mode] == 'learn_de_to_native'
                MSGS[:learn_prompt_de_to_ru].call(word.full_german)
              else
-               MSGS[:learn_prompt_ru_to_de].call(word.translation)
+               MSGS[:learn_prompt_ru_to_de].call(word.display_translation)
              end
 
     reply "#{MSGS[:learn_progress].call(due_count)}\n\n#{prompt}",
@@ -89,8 +89,14 @@ class LearningHandler
       return
     end
 
-    word     = review.word
-    expected = @session[:mode] == 'learn_de_to_native' ? word.translation : word.full_german
+    word = review.word
+    if @session[:mode] == 'learn_de_to_native'
+      expected_alts    = word.alternatives_translation
+      expected_display = word.display_translation
+    else
+      expected_alts    = word.alternatives_de
+      expected_display = word.full_german
+    end
 
     case @message.text
     when MSGS[:btn_back]
@@ -108,13 +114,13 @@ class LearningHandler
       record_result(word, 0)
       @session[:reviewed_count] = (@session[:reviewed_count] || 0) + 1
       reinsert_or_advance(0)
-      reply "#{MSGS[:feedback_empty]}\n#{MSGS[:learn_correct_answer].call(expected)}",
+      reply "#{MSGS[:feedback_empty]}\n#{MSGS[:learn_correct_answer].call(expected_display)}",
             parse_mode: 'Markdown',
             reply_markup: LearningHandler.report_button(review.id)
       show_next_word
 
     else
-      score = AnswerScorer.score(expected: expected, given: @message.text)
+      score = AnswerScorer.score(expected: expected_alts, given: @message.text)
       user  = User.find_or_create_from_telegram(@message.from)
       SpacedRepetition.update(review, score, user.sessions_completed)
       record_result(word, score)
@@ -122,7 +128,7 @@ class LearningHandler
       reinsert_or_advance(score)
 
       text = feedback_for(score)
-      text += "\n#{MSGS[:learn_correct_answer].call(expected)}" if score < 100
+      text += "\n#{MSGS[:learn_correct_answer].call(expected_display)}" if score < 100
       reply text, parse_mode: 'Markdown', reply_markup: LearningHandler.report_button(review.id)
       show_next_word
     end
@@ -133,12 +139,22 @@ class LearningHandler
     return unless target_review
 
     word = target_review.word
+    side = @session[:mode] == 'learn_de_to_native' ? 'translation' : 'de'
+
+    prompt = if side == 'translation'
+               current = word.alternatives_translation.join(', ')
+               MSGS[:edit_ask_synonym_translation].call(word.full_german, current)
+             else
+               current = word.alternatives_de.join(', ')
+               MSGS[:edit_ask_synonym_de].call(word.display_translation, current)
+             end
+
     @session[:scene]           = :edit_word
-    @session[:scene_step]      = :awaiting_translation
     @session[:edit_review_id]  = review_id
+    @session[:edit_side]       = side
     @session[:edit_saved_mode] = @session[:mode]
     @session[:mode]            = nil
-    reply MSGS[:edit_ask_translation].call(word.full_german, word.translation),
+    reply prompt,
           parse_mode: 'Markdown',
           reply_markup: Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
   end
@@ -160,7 +176,7 @@ class LearningHandler
 
   def record_result(word, score)
     @session[:session_results] ||= []
-    @session[:session_results] << { word: word.full_german, translation: word.translation, score: score }
+    @session[:session_results] << { word: word.full_german, ru: word.ru, score: score }
   end
 
   def show_stats_and_return

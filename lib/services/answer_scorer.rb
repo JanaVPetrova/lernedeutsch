@@ -2,8 +2,9 @@ class AnswerScorer
   ARTICLES = %w[der die das].freeze
 
   # Returns an integer score 0–100.
+  # `expected` may be a String or an Array of accepted answers.
   def self.score(expected:, given:)
-    new(expected, given).score
+    Array(expected).map { |alt| new(alt, given).score }.max || 0
   end
 
   def initialize(expected, given)
@@ -34,7 +35,7 @@ class AnswerScorer
   private
 
   def normalize(str)
-    str.to_s.gsub(/\([^)]*\)/, '').strip.downcase.squeeze(' ')
+    str.to_s.gsub(/\([^)]*\)/, '').gsub(/[[:punct:]]/, '').strip.downcase.squeeze(' ')
   end
 
   def split_article(str)

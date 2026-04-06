@@ -4,7 +4,7 @@ require 'logger'
 require 'telegram/bot'
 require_relative 'lib/boot'
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 
 TOKEN = ENV.fetch('TELEGRAM_BOT_TOKEN') { raise 'TELEGRAM_BOT_TOKEN is not set' }
 
@@ -308,33 +308,42 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         next
       end
       word = review.word
+      side = session[:edit_side]
 
-      if session[:scene_step] == :awaiting_translation
-        session[:edit_new_translation] = text.strip
-        session[:scene_step]           = :awaiting_german
-        bot.api.send_message(
-          chat_id: chat_id,
-          parse_mode: 'Markdown',
-          text: MSGS[:edit_ask_german].call(word.full_german)
-        )
-        next
-      end
+      msg = if side == 'translation'
+              new_ru = text.strip
+              rn = Word.normalize(new_ru)
+              synonym = Word.find_by(de_normalized: word.de_normalized, ru_normalized: rn) ||
+                        Word.new(de: word.de, ru: new_ru)
+              if synonym.persisted?
+                MSGS[:edit_synonym_exists]
+              else
+                synonym.article_de = word.article_de
+                synonym.word_group = word.word_group
+                synonym.save ? MSGS[:edit_synonym_done] : MSGS[:edit_synonym_invalid]
+              end
+            else
+              article_de, de = WordImporter.split_article(text.strip)
+              dn = Word.normalize(de)
+              synonym = Word.find_by(de_normalized: dn, ru_normalized: word.ru_normalized) ||
+                        Word.new(de: de, ru: word.ru)
+              if synonym.persisted?
+                MSGS[:edit_synonym_exists]
+              else
+                synonym.article_de = article_de
+                synonym.word_group = word.word_group
+                synonym.save ? MSGS[:edit_synonym_done] : MSGS[:edit_synonym_invalid]
+              end
+            end
 
-      if session[:scene_step] == :awaiting_german
-        article, german_word = WordImporter.split_article(text.strip)
-        if word.update(translation: session[:edit_new_translation], german_word: german_word, article: article)
-          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_done])
-        else
-          bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_invalid_german])
-        end
+      bot.api.send_message(chat_id: chat_id, text: msg)
 
-        session[:scene]                = nil
-        session[:edit_review_id]       = nil
-        session[:edit_new_translation] = nil
-        session[:mode]                 = session.delete(:edit_saved_mode)
-        LearningHandler.new(bot, message, session).show_next_word
-        next
-      end
+      session[:scene]          = nil
+      session[:edit_review_id] = nil
+      session[:edit_side]      = nil
+      session[:mode]           = session.delete(:edit_saved_mode)
+      LearningHandler.new(bot, message, session).show_next_word
+      next
     end
 
     # ── Scene: snoozed_words ─────────────────────────────────────────────────

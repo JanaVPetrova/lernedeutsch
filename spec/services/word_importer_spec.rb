@@ -36,21 +36,21 @@ RSpec.describe WordImporter do
       content = "gehen\tto go\nschlafen\tto sleep"
       result  = described_class.parse(content)
       expect(result).to eq([
-        { german_word: 'gehen',    article: nil, translation: 'to go'    },
-        { german_word: 'schlafen', article: nil, translation: 'to sleep' }
+        { de: 'gehen',    article_de: nil, ru: 'to go'    },
+        { de: 'schlafen', article_de: nil, ru: 'to sleep' }
       ])
     end
 
-    it 'extracts the article when present' do
+    it 'extracts article_de when present' do
       content = "der Hund\tdog"
       result  = described_class.parse(content)
-      expect(result.first).to include(german_word: 'Hund', article: 'der', translation: 'dog')
+      expect(result.first).to include(de: 'Hund', article_de: 'der', ru: 'dog')
     end
 
     it 'strips whitespace from both columns' do
       content = "  der Hund  \t  dog  "
       result  = described_class.parse(content)
-      expect(result.first).to include(german_word: 'Hund', article: 'der', translation: 'dog')
+      expect(result.first).to include(de: 'Hund', article_de: 'der', ru: 'dog')
     end
 
     it 'skips blank lines' do
@@ -62,10 +62,10 @@ RSpec.describe WordImporter do
       content = "# comment\ngehen\tto go"
       result  = described_class.parse(content)
       expect(result.length).to eq(1)
-      expect(result.first[:german_word]).to eq('gehen')
+      expect(result.first[:de]).to eq('gehen')
     end
 
-    it 'skips rows with missing translation' do
+    it 'skips rows with missing ru' do
       content = "gehen\t"
       expect(described_class.parse(content)).to be_empty
     end
@@ -73,11 +73,46 @@ RSpec.describe WordImporter do
     it 'strips UTF-8 BOM' do
       content = "\xEF\xBB\xBFgehen\tto go"
       result  = described_class.parse(content)
-      expect(result.first[:german_word]).to eq('gehen')
+      expect(result.first[:de]).to eq('gehen')
     end
 
     it 'returns an empty array for empty content' do
       expect(described_class.parse('')).to be_empty
+    end
+
+    context 'with pipe-separated synonyms' do
+      it 'expands multiple ru values into separate rows' do
+        content = "der Hund\tdog|hound"
+        result  = described_class.parse(content)
+        expect(result).to contain_exactly(
+          { de: 'Hund', article_de: 'der', ru: 'dog'   },
+          { de: 'Hund', article_de: 'der', ru: 'hound' }
+        )
+      end
+
+      it 'expands multiple German forms into separate rows' do
+        content = "Freund|Bekannter\tfriend"
+        result  = described_class.parse(content)
+        expect(result).to contain_exactly(
+          { de: 'Freund',    article_de: nil, ru: 'friend' },
+          { de: 'Bekannter', article_de: nil, ru: 'friend' }
+        )
+      end
+
+      it 'produces the cross-product when both sides have pipes' do
+        content = "der Freund|die Freundin\tfriend|pal"
+        result  = described_class.parse(content)
+        expect(result.size).to eq(4)
+      end
+
+      it 'extracts article_de from each German alternative' do
+        content = "der Freund|die Freundin\tfriend"
+        result  = described_class.parse(content)
+        expect(result).to contain_exactly(
+          { de: 'Freund',   article_de: 'der', ru: 'friend' },
+          { de: 'Freundin', article_de: 'die', ru: 'friend' }
+        )
+      end
     end
   end
 
@@ -86,9 +121,9 @@ RSpec.describe WordImporter do
   describe '.import' do
     let(:words_data) do
       [
-        { german_word: 'Hund',     article: 'der', translation: 'dog'   },
-        { german_word: 'Katze',    article: 'die', translation: 'cat'   },
-        { german_word: 'schlafen', article: nil,   translation: 'sleep' }
+        { de: 'Hund',     article_de: 'der', ru: 'dog'   },
+        { de: 'Katze',    article_de: 'die', ru: 'cat'   },
+        { de: 'schlafen', article_de: nil,   ru: 'sleep' }
       ]
     end
 
@@ -100,14 +135,28 @@ RSpec.describe WordImporter do
       expect(described_class.import(words_data)).to eq(3)
     end
 
-    it 'persists the article' do
+    it 'persists article_de' do
       described_class.import(words_data)
-      expect(Word.find_by(german_word: 'Hund').article).to eq('der')
+      expect(Word.find_by(de: 'Hund').article_de).to eq('der')
     end
 
-    it 'skips words that already exist globally' do
+    it 'skips pairs that already exist' do
       described_class.import(words_data)
       expect(described_class.import(words_data)).to eq(0)
+    end
+
+    it 'deduplicates punctuation/spacing variants of the same word' do
+      described_class.import([{ de: 'Die Speisekarte, bitte', article_de: nil, ru: 'счёт, пожалуйста' }])
+      expect {
+        described_class.import([{ de: 'die Speisekarte bitte.', article_de: nil, ru: 'счёт пожалуйста' }])
+      }.not_to change(Word, :count)
+    end
+
+    it 'allows the same de with a different ru (synonym)' do
+      described_class.import([{ de: 'Freund', article_de: 'der', ru: 'friend' }])
+      expect {
+        described_class.import([{ de: 'Freund', article_de: 'der', ru: 'pal' }])
+      }.to change(Word, :count).by(1)
     end
 
     it 'assigns the word_group when provided' do

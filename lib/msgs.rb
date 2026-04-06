@@ -85,7 +85,7 @@ MSGS = {
                when 1..49  then '❌'
                else             '⏭'
                end
-        lines << "#{icon} #{r[:word]} — #{r[:translation]}"
+        lines << "#{icon} #{r[:word]} — #{r[:ru]}"
       end
     end
 
@@ -130,8 +130,13 @@ MSGS = {
   unsnoozed_done:       ->(word) { "✅ *#{word}* возвращено в очередь." },
 
   # ── Edit word scene ────────────────────────────────────────────────────────
-  edit_ask_translation: ->(german, translation) { "Редактируем слово:\n\n🇩🇪 *#{german}*\n🇷🇺 #{translation}\n\nВведи правильный перевод на русский:" },
-  edit_ask_german:      ->(current) { "Текущее немецкое слово: *#{current}*\n\nВведи правильное немецкое слово (с артиклем, если нужно):" },
-  edit_done:            '✅ Слово обновлено! Продолжаем.',
-  edit_invalid_german:  'Не удалось сохранить. Проверь немецкое слово и попробуй ещё раз.',
+  edit_ask_synonym_translation: ->(german, current) {
+    "Добавляем синоним перевода для *#{german}*.\n\nСейчас принимается: #{current}\n\nВведи ещё один правильный перевод:"
+  },
+  edit_ask_synonym_de: ->(translation, current) {
+    "Добавляем синоним немецкого слова для *#{translation}*.\n\nСейчас принимается: #{current}\n\nВведи немецкое слово (с артиклем, если нужно):"
+  },
+  edit_synonym_done:    '✅ Синоним добавлен! Продолжаем.',
+  edit_synonym_exists:  '⚠️ Такой вариант уже есть. Продолжаем.',
+  edit_synonym_invalid: '⚠️ Не удалось сохранить. Проверь слово и попробуй ещё раз.',
 }.freeze

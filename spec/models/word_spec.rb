@@ -2,47 +2,85 @@ require 'spec_helper'
 
 RSpec.describe Word do
   describe 'validations' do
-    it 'is valid with german_word and translation' do
+    it 'is valid with de and ru' do
       expect(build(:word)).to be_valid
     end
 
-    it 'is invalid without german_word' do
-      expect(build(:word, german_word: nil)).not_to be_valid
+    it 'is invalid without de' do
+      expect(build(:word, de: nil)).not_to be_valid
     end
 
-    it 'is invalid without translation' do
-      expect(build(:word, translation: nil)).not_to be_valid
+    it 'is invalid without ru' do
+      expect(build(:word, ru: nil)).not_to be_valid
     end
 
-    it 'is invalid with a duplicate german_word' do
-      create(:word, german_word: 'Hund')
-      expect(build(:word, german_word: 'hund')).not_to be_valid
+    it 'is invalid when the same (de, ru) pair already exists' do
+      create(:word, de: 'Hund', ru: 'dog')
+      expect(build(:word, de: 'hund', ru: 'dog')).not_to be_valid
     end
 
-    it 'is invalid with an unrecognised article' do
-      expect(build(:word, article: 'le')).not_to be_valid
+    it 'treats punctuation and spacing variants as the same word' do
+      create(:word, de: 'Die Speisekarte, bitte', ru: 'счёт, пожалуйста')
+      expect(build(:word, de: 'die Speisekarte bitte.', ru: 'счёт пожалуйста')).not_to be_valid
     end
 
-    it 'allows a nil article' do
-      expect(build(:word, article: nil)).to be_valid
+    it 'allows the same de with a different ru (synonym)' do
+      create(:word, de: 'Freund', ru: 'friend')
+      expect(build(:word, de: 'Freund', ru: 'pal')).to be_valid
+    end
+
+    it 'is invalid with an unrecognised article_de' do
+      expect(build(:word, article_de: 'le')).not_to be_valid
+    end
+
+    it 'allows a nil article_de' do
+      expect(build(:word, article_de: nil)).to be_valid
     end
 
     %w[der die das].each do |article|
-      it "allows article '#{article}'" do
-        expect(build(:word, article: article)).to be_valid
+      it "allows article_de '#{article}'" do
+        expect(build(:word, article_de: article)).to be_valid
       end
     end
   end
 
   describe '#full_german' do
-    it 'returns just the word when there is no article' do
-      word = build(:word, german_word: 'gehen', article: nil)
+    it 'returns just de when there is no article_de' do
+      word = build(:word, de: 'gehen', article_de: nil)
       expect(word.full_german).to eq('gehen')
     end
 
-    it 'prepends the article when present' do
-      word = build(:word, german_word: 'Hund', article: 'der')
+    it 'prepends article_de when present' do
+      word = build(:word, de: 'Hund', article_de: 'der')
       expect(word.full_german).to eq('der Hund')
+    end
+  end
+
+  describe '#alternatives_translation' do
+    it 'returns just its own ru when no synonyms exist' do
+      word = create(:word, de: 'Hund', ru: 'dog')
+      expect(word.alternatives_translation).to eq(['dog'])
+    end
+
+    it 'returns all ru values sharing the same de_normalized' do
+      create(:word, de: 'Freund', ru: 'friend')
+      create(:word, de: 'Freund', ru: 'pal')
+      word = Word.find_by(ru: 'friend')
+      expect(word.alternatives_translation).to contain_exactly('friend', 'pal')
+    end
+  end
+
+  describe '#alternatives_de' do
+    it 'returns just its own german form when no synonyms exist' do
+      word = create(:word, de: 'Hund', article_de: 'der', ru: 'dog')
+      expect(word.alternatives_de).to eq(['der Hund'])
+    end
+
+    it 'returns all german forms sharing the same ru_normalized' do
+      create(:word, de: 'Freund',    article_de: 'der', ru: 'friend')
+      create(:word, de: 'Bekannter', article_de: 'der', ru: 'friend')
+      word = Word.find_by(de: 'Freund')
+      expect(word.alternatives_de).to contain_exactly('der Freund', 'der Bekannter')
     end
   end
 

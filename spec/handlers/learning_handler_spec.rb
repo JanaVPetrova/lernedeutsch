@@ -108,7 +108,7 @@ RSpec.describe LearningHandler do
     end
 
     context 'when a word is in the queue' do
-      let(:word)    { create(:word, german_word: 'Hund', translation: 'собака') }
+      let(:word)    { create(:word, de: 'Hund', ru: 'собака') }
       let!(:review) { create(:word_review, word: word, user: user, due_session: 0) }
 
       before do
@@ -153,7 +153,7 @@ RSpec.describe LearningHandler do
       end
 
       it 'includes the article in the German word when present' do
-        word.update!(article: 'der')
+        word.update!(article_de: 'der')
         handler.show_next_word
         expect(sent_messages.last[:text]).to include('der Hund')
       end
@@ -198,11 +198,11 @@ RSpec.describe LearningHandler do
     end
 
     context 'with an active review' do
-      let(:word)    { create(:word, german_word: 'Katze', translation: 'кошка') }
+      let(:word)    { create(:word, de: 'Katze', ru: 'кошка') }
       let!(:review) { create(:word_review, word: word, user: user, due_session: 0) }
 
       # A second word in the queue keeps the session alive after the first answer.
-      let!(:word2)   { create(:word, german_word: 'Baum', translation: 'дерево') }
+      let!(:word2)   { create(:word, de: 'Baum', ru: 'дерево') }
       let!(:review2) { create(:word_review, word: word2, user: user, due_session: 0) }
 
       before do
@@ -339,9 +339,9 @@ RSpec.describe LearningHandler do
 
         before do
           session[:session_results] = [
-            { word: 'Katze', translation: 'кошка',  score: 100 },
-            { word: 'Hund',  translation: 'собака', score: 0   },
-            { word: 'gehen', translation: 'идти',   score: 75  }
+            { word: 'Katze', ru: 'кошка',  score: 100 },
+            { word: 'Hund',  ru: 'собака', score: 0   },
+            { word: 'gehen', ru: 'идти',   score: 75  }
           ]
         end
 
@@ -387,7 +387,7 @@ RSpec.describe LearningHandler do
         it 'records the word and score on a normal answer' do
           allow(message).to receive(:text).and_return('кошка')
           handler.handle_answer
-          expect(session[:session_results].first).to include(word: 'Katze', translation: 'кошка', score: 100)
+          expect(session[:session_results].first).to include(word: 'Katze', ru: 'кошка', score: 100)
         end
 
         it 'records score 0 on skip' do
@@ -406,14 +406,11 @@ RSpec.describe LearningHandler do
       # ── #handle_report_mistake (inline callback) ─────────────────────────────
 
       describe '#handle_report_mistake' do
+        before { session[:mode] = 'learn_de_to_native' }
+
         it 'sets session scene to :edit_word' do
           handler.handle_report_mistake(review.id)
           expect(session[:scene]).to eq(:edit_word)
-        end
-
-        it 'sets scene_step to :awaiting_translation' do
-          handler.handle_report_mistake(review.id)
-          expect(session[:scene_step]).to eq(:awaiting_translation)
         end
 
         it 'stores the given review id in session' do
@@ -421,12 +418,23 @@ RSpec.describe LearningHandler do
           expect(session[:edit_review_id]).to eq(review.id)
         end
 
-        it 'can edit any arbitrary past review by id' do
+        it 'sets edit_side to "translation" in learn_de_to_native mode' do
+          handler.handle_report_mistake(review.id)
+          expect(session[:edit_side]).to eq('translation')
+        end
+
+        it 'sets edit_side to "de" in learn_native_to_de mode' do
+          session[:mode] = 'learn_native_to_de'
+          handler.handle_report_mistake(review.id)
+          expect(session[:edit_side]).to eq('de')
+        end
+
+        it 'can target any arbitrary past review by id' do
           handler.handle_report_mistake(review2.id)
           expect(session[:edit_review_id]).to eq(review2.id)
         end
 
-        it 'sends the edit prompt with both the German word and the current translation' do
+        it 'sends a prompt mentioning the German word and the current accepted answers' do
           handler.handle_report_mistake(review.id)
           expect(sent_messages.last[:text]).to include('Katze')
           expect(sent_messages.last[:text]).to include('кошка')

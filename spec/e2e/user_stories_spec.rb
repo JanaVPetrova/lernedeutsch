@@ -180,7 +180,7 @@ RSpec.describe 'Bot user stories', type: :e2e do
 
   describe 'learning session (German → Translation)' do
     let!(:group) { create(:word_group) }
-    let!(:word)  { create(:word, german_word: 'Hund', article: 'der', translation: 'dog', word_group: group) }
+    let!(:word)  { create(:word, de: 'Hund', article_de: 'der', ru: 'dog', word_group: group) }
 
     before { receive(tg_user, text: '/start') }
 
@@ -230,7 +230,7 @@ RSpec.describe 'Bot user stories', type: :e2e do
   # ── Story 5: learning session – Translation → German ────────────────────────
 
   describe 'learning session (Translation → German)' do
-    let!(:word) { create(:word, german_word: 'Katze', article: nil, translation: 'cat') }
+    let!(:word) { create(:word, de: 'Katze', article_de: nil, ru: 'cat') }
 
     before { receive(tg_user, text: '/start') }
 
@@ -244,7 +244,7 @@ RSpec.describe 'Bot user stories', type: :e2e do
     end
 
     it 'requires the correct article for nouns' do
-      word.update!(german_word: 'Hund', article: 'der', translation: 'dog')
+      word.update!(de: 'Hund', article_de: 'der', ru: 'dog')
       receive(tg_user, text: MSGS[:btn_ru_to_de])
       receive(tg_user, text: MSGS[:btn_all_words])
 
@@ -256,7 +256,7 @@ RSpec.describe 'Bot user stories', type: :e2e do
   # ── Story 6: skip a word during practice ────────────────────────────────────
 
   describe 'user skips a word during practice' do
-    let!(:word) { create(:word, german_word: 'Apfel', translation: 'apple') }
+    let!(:word) { create(:word, de: 'Apfel', ru: 'apple') }
 
     before do
       receive(tg_user, text: '/start')
@@ -286,7 +286,7 @@ RSpec.describe 'Bot user stories', type: :e2e do
   # ── Story 7: snooze a word and manage the stop-list ─────────────────────────
 
   describe 'user snoozed a word and manages the stop-list' do
-    let!(:word) { create(:word, german_word: 'Buch', article: 'das', translation: 'book') }
+    let!(:word) { create(:word, de: 'Buch', article_de: 'das', ru: 'book') }
 
     before do
       receive(tg_user, text: '/start')
@@ -324,7 +324,7 @@ RSpec.describe 'Bot user stories', type: :e2e do
 
   describe 'global statistics' do
     let!(:group) { create(:word_group, name_ru: 'Животные', name_de: 'Tiere') }
-    let!(:word)  { create(:word, german_word: 'Hund', translation: 'dog', word_group: group) }
+    let!(:word)  { create(:word, de: 'Hund', ru: 'dog', word_group: group) }
 
     before { receive(tg_user, text: '/start') }
 

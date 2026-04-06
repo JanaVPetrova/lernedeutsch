@@ -13,15 +13,15 @@ FactoryBot.define do
   end
 
   factory :word do
-    sequence(:german_word) { |n| "Wort#{n}" }
-    translation { 'word' }
-    article     { nil }
+    sequence(:de) { |n| "Wort#{n}" }
+    ru          { 'word' }
+    article_de  { nil }
     word_group  { nil }
 
     trait :with_article do
-      german_word { 'Hund' }
-      article     { 'der' }
-      translation { 'dog' }
+      de         { 'Hund' }
+      article_de { 'der' }
+      ru         { 'dog' }
     end
 
     trait :in_group do

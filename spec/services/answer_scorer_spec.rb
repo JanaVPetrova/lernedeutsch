@@ -77,6 +77,40 @@ RSpec.describe AnswerScorer do
       end
     end
 
+    # ── Punctuation stripping ─────────────────────────────────────────────────
+
+    context 'when expected ends with punctuation' do
+      let(:expected) { 'Ist das vegetarisch?' }
+      let(:given)    { 'Ist das vegetarisch' }
+
+      it 'scores 100 — trailing punctuation is ignored' do
+        expect(score).to eq(100)
+      end
+    end
+
+    context 'when given has different punctuation than expected' do
+      let(:expected) { 'Ist das vegetarisch?' }
+      let(:given)    { 'Ist das vegetarisch!' }
+
+      it { is_expected.to eq(100) }
+    end
+
+    # ── Multiple correct alternatives ─────────────────────────────────────────
+
+    context 'when expected is an array of alternatives' do
+      let(:expected) { ['Ist das vegetarisch?', 'Ist es vegetarisch?'] }
+
+      context 'with the first alternative' do
+        let(:given) { 'Ist das vegetarisch' }
+        it { is_expected.to eq(100) }
+      end
+
+      context 'with the second alternative' do
+        let(:given) { 'Ist es vegetarisch' }
+        it { is_expected.to eq(100) }
+      end
+    end
+
     # ── Service-mark stripping ─────────────────────────────────────────────────
 
     context 'when expected contains a service mark like (мн.)' do
