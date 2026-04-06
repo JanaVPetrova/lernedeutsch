@@ -111,9 +111,12 @@ MSGS = {
 
   # ── Learning keyboard buttons ──────────────────────────────────────────────
   btn_skip:           'Не помню',
+  btn_hint:           '💡 Подсказка',
   btn_snooze:         'Не предлагать',
   btn_report_mistake: 'Ошибка в задании',
   btn_back:           '← Назад',
+
+  learn_hint:         ->(options) { "💡 Выбери один из вариантов:\n\n#{options.map.with_index(1) { |o, i| "#{i}. #{o}" }.join("\n")}" },
 
   # ── Answer feedback ────────────────────────────────────────────────────────
   feedback_perfect:  '🎉 Идеально!',
@@ -130,8 +133,8 @@ MSGS = {
   unsnoozed_done:       ->(word) { "✅ *#{word}* возвращено в очередь." },
 
   # ── Edit word scene ────────────────────────────────────────────────────────
-  btn_yes:              'Да',
-  btn_no:               'Нет',
+  btn_correct:              'Верно',
+  btn_next:               'Дальше',
 
   edit_fix_de: ->(current_de) {
     "🇩🇪 Немецкий вариант:\n\n*#{current_de}*\n\nЕсли здесь опечатка — введи исправленную версию.\nЕсли всё верно — нажми *Да*."

@@ -4,7 +4,7 @@ require 'logger'
 require 'telegram/bot'
 require_relative 'lib/boot'
 
-VERSION = '1.1.2'
+VERSION = '1.2.0'
 
 TOKEN = ENV.fetch('TELEGRAM_BOT_TOKEN') { raise 'TELEGRAM_BOT_TOKEN is not set' }
 
@@ -320,7 +320,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       handler   = LearningHandler.new(bot, message, session)
       word      = review.word
       yes_no_kb = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
-        keyboard: [[MSGS[:btn_yes], MSGS[:btn_no]]],
+        keyboard: [[MSGS[:btn_correct], MSGS[:btn_next]]],
         resize_keyboard: true, one_time_keyboard: true
       )
       no_kb = Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
@@ -366,7 +366,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
       case session[:scene_step]
 
       when :fix_de
-        if text.strip == MSGS[:btn_yes]
+        if text.strip == MSGS[:btn_correct]
           # User confirmed current DE is correct — move on to "add more?" prompt.
           bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_ask_more_de],
                                parse_mode: 'Markdown', reply_markup: yes_no_kb)
@@ -380,7 +380,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         end
 
       when :add_more_de
-        if text.strip == MSGS[:btn_yes]
+        if text.strip == MSGS[:btn_correct]
           bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_new_de],
                                parse_mode: 'Markdown', reply_markup: no_kb)
           session[:scene_step] = :new_de
@@ -401,7 +401,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         session[:scene_step] = :add_more_de
 
       when :fix_ru
-        if text.strip == MSGS[:btn_yes]
+        if text.strip == MSGS[:btn_correct]
           bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_ask_more_ru],
                                parse_mode: 'Markdown', reply_markup: yes_no_kb)
           session[:scene_step] = :add_more_ru
@@ -413,7 +413,7 @@ Telegram::Bot::Client.run(TOKEN) do |bot|
         end
 
       when :add_more_ru
-        if text.strip == MSGS[:btn_yes]
+        if text.strip == MSGS[:btn_correct]
           bot.api.send_message(chat_id: chat_id, text: MSGS[:edit_new_ru],
                                parse_mode: 'Markdown', reply_markup: no_kb)
           session[:scene_step] = :new_ru

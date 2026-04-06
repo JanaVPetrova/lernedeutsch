@@ -1,8 +1,8 @@
 class LearningHandler
   LEARNING_KEYBOARD = Telegram::Bot::Types::ReplyKeyboardMarkup.new(
     keyboard: [
-      [MSGS[:btn_skip], MSGS[:btn_snooze]],
-      [MSGS[:btn_back]]
+      [MSGS[:btn_skip], MSGS[:btn_hint]],
+      [MSGS[:btn_snooze], MSGS[:btn_back]]
     ],
     resize_keyboard: true
   )
@@ -108,6 +108,11 @@ class LearningHandler
       reply MSGS[:snoozed_done], parse_mode: 'Markdown'
       show_next_word
 
+    when MSGS[:btn_hint]
+      @session[:hint_used] = true
+      options = hint_options(word, expected_alts)
+      reply MSGS[:learn_hint].call(options), parse_mode: 'Markdown'
+
     when MSGS[:btn_skip]
       user = User.find_or_create_from_telegram(@message.from)
       SpacedRepetition.update(review, 0, user.sessions_completed)
@@ -121,6 +126,9 @@ class LearningHandler
 
     else
       score = AnswerScorer.score(expected: expected_alts, given: @message.text)
+      if @session.delete(:hint_used)
+        score = (score * 0.5).round
+      end
       user  = User.find_or_create_from_telegram(@message.from)
       SpacedRepetition.update(review, score, user.sessions_completed)
       record_result(word, score)
@@ -190,6 +198,20 @@ class LearningHandler
     @session[:queue]             = nil
   end
 
+  def hint_options(word, correct_alts)
+    correct = correct_alts.first
+
+    distractors = if @session[:mode] == 'learn_de_to_native'
+                    Word.where.not(ru_normalized: word.ru_normalized)
+                        .pluck(:ru)
+                  else
+                    Word.where.not(de_normalized: word.de_normalized)
+                        .map { |w| w.full_german }
+                  end
+
+    (distractors.sample(3) + [correct]).shuffle
+  end
+
   def feedback_for(score)
     case score
     when 100    then MSGS[:feedback_perfect]
@@ -202,7 +224,7 @@ class LearningHandler
 
   def yes_no_keyboard
     Telegram::Bot::Types::ReplyKeyboardMarkup.new(
-      keyboard: [[MSGS[:btn_yes], MSGS[:btn_no]]],
+      keyboard: [[MSGS[:btn_correct], MSGS[:btn_next]]],
       resize_keyboard: true,
       one_time_keyboard: true
     )
